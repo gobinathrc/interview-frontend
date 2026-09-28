@@ -20,7 +20,7 @@ function App() {
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px", textAlign: "center", fontFamily: "sans-serif" }}>
       
-      <h1>The Locker Room Interview</h1>
+      <h1> First Round Pick Prep</h1>
       <p style={{ color: "#d71e1e", marginBottom: "40px" }}>Generate highly challenging interview questions.</p>
       
       <button
