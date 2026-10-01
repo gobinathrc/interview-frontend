@@ -26,7 +26,7 @@ function App() {
       setQuestion(data.question)
       
       // Stage 1: Flash "THE PICK IS IN"
-      setAppState("pick-in")
+      setAppState("pick-of-the-question-is-in")
       
       // Stage 2: Wait 3 seconds, then reveal the question and start the clock!
       setTimeout(() => {
