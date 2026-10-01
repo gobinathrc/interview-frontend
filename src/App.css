@@ -29,9 +29,24 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 2px;
-  margin: 0;
+  margin: 0 0 15px 0; /* Added spacing to stop the clash */
+  line-height: 1.2; /* Forces the text to stay in its own lane */
   color: #f8fafc;
   text-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+.loading-banner {
+  background: #475569;
+  color: white;
+  font-family: 'Oswald', sans-serif;
+  font-size: 2rem;
+  padding: 20px 50px;
+  border: 4px solid #64748b;
+  border-radius: 12px;
+  text-transform: uppercase;
+  animation: pulse 1.5s infinite;
+  margin-bottom: 20px;
+}
 }
 
 .draft-header p {
