@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 
-// The 9 Topics mapped to NFL Concepts
 const DRAFT_BOARD = [
   { id: 1, nfl: "The Offensive Line", ds: "SQL & Data Engineering" },
   { id: 2, nfl: "Scouting Combine", ds: "Descriptive Stats & EDA" },
@@ -14,11 +13,22 @@ const DRAFT_BOARD = [
   { id: 9, nfl: "The Front Office", ds: "MLOps & Production" }
 ]
 
+const DIFFICULTIES = [
+  { id: "easy", name: "Rookie (Easy)" },
+  { id: "medium", name: "Pro-Bowler (Medium)" },
+  { id: "hard", name: "Hall of Famer (Hard)" }
+]
+
 function App() {
   const [question, setQuestion] = useState("")
   const [appState, setAppState] = useState("idle") 
   const [timeLeft, setTimeLeft] = useState(60)
+  
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
+  const [selectedDiff, setSelectedDiff] = useState<string | null>(null)
+  
+  // This array remembers every question you generate!
+  const [history, setHistory] = useState<string[]>([])
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
@@ -31,17 +41,30 @@ function App() {
   }, [appState, timeLeft])
 
   const fetchQuestion = async () => {
-    if (!selectedTopic) return; // Prevent drafting without a topic
+    if (!selectedTopic || !selectedDiff) return;
 
     setAppState("loading")
     setTimeLeft(60)
     
     try {
-      // Pass the selected topic in the URL to Python
-      const url = `https://interview-backend-2-svse.onrender.com/generate_question?topic=${encodeURIComponent(selectedTopic)}`
-      const response = await fetch(url)
+      // Changed to POST to send data securely
+      const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          topic: selectedTopic,
+          difficulty: selectedDiff,
+          history: history
+        })
+      })
+      
       const data = await response.json()
       setQuestion(data.question)
+      
+      // Save this new question to our history log so it doesn't repeat
+      setHistory(prev => [...prev, data.question])
       
       setAppState("pick-in")
       setTimeout(() => {
@@ -61,6 +84,13 @@ function App() {
     return `0${m}:${s < 10 ? '0' : ''}${s}`
   }
 
+  // Button logic
+  const isReady = selectedTopic && selectedDiff;
+  let btnText = "Select Position & Level";
+  if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level";
+  if (!selectedTopic && selectedDiff) btnText = "Select Target Position";
+  if (isReady) btnText = "Make The Pick";
+
   return (
     <div className="draft-container">
       
@@ -77,7 +107,6 @@ function App() {
           </div>
         )}
 
-        {/* Show the Draft Board ONLY when idle */}
         {appState === "idle" && (
           <>
             <div className="draft-board-title">Target Position on the Board</div>
@@ -94,13 +123,26 @@ function App() {
               ))}
             </div>
 
+            <div className="draft-board-title">Prospect Level (Difficulty)</div>
+            <div className="difficulty-board">
+              {DIFFICULTIES.map(diff => (
+                <button
+                  key={diff.id}
+                  className={`diff-btn ${selectedDiff === diff.name ? 'selected' : ''}`}
+                  onClick={() => setSelectedDiff(diff.name)}
+                >
+                  {diff.name}
+                </button>
+              ))}
+            </div>
+
             <button 
               className="draft-button" 
               onClick={fetchQuestion}
-              disabled={!selectedTopic}
-              style={{ opacity: selectedTopic ? 1 : 0.5 }}
+              disabled={!isReady}
+              style={{ opacity: isReady ? 1 : 0.5 }}
             >
-              {selectedTopic ? "Make The Pick" : "Select a Position First"}
+              {btnText}
             </button>
           </>
         )}
@@ -120,9 +162,8 @@ function App() {
         {(appState === "active" || appState === "time-up") && (
           <div className="active-card">
             <div className="question-box">
-              {/* Show which topic was picked */}
               <div style={{ color: '#1d4ed8', fontWeight: 'bold', marginBottom: '15px', textTransform: 'uppercase' }}>
-                SCOUTING REPORT: {selectedTopic}
+                SCOUTING REPORT: {selectedTopic} ({selectedDiff})
               </div>
               <p>{question}</p>
             </div>
@@ -131,10 +172,7 @@ function App() {
               <div className="time-up-banner">TIME'S UP. PENCILS DOWN.</div>
             )}
             
-            <button className="reset-button" onClick={() => {
-              setAppState("idle")
-              setSelectedTopic(null)
-            }}>
+            <button className="reset-button" onClick={() => setAppState("idle")}>
               Next Pick
             </button>
           </div>
