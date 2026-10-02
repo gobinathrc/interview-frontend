@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 
-const DRAFT_BOARD = [
+ DRAFT_BOARD = [
   { id: 1, nfl: "The Offensive Line", ds: "SQL & Data Engineering" },
   { id: 2, nfl: "Scouting Combine", ds: "Descriptive Stats & EDA" },
   { id: 3, nfl: "Coaches' Challenge", ds: "Inferential Stats & Hypothesis Testing" },
@@ -37,48 +37,64 @@ function App() {
     return () => clearTimeout(timer)
   }, [appState, timeLeft])
 
+    // --- GENERATE QUESTION LOGIC ---
   const fetchQuestion = async (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevents accidental browser page refreshes
-    if (!selectedTopic || !selectedDiff) return;
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!selectedTopic || !selectedDiff || !token) return;
 
-    setAppState("loading")
-    setTimeLeft(60)
+    setDebugError("");
+    setAppState("loading");
+    setTimeLeft(60);
     
     try {
       const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` 
+        },
         body: JSON.stringify({
           topic: selectedTopic,
-          difficulty: selectedDiff,
-          history: history
+          difficulty: selectedDiff
         })
       });
       
-      // If the server rejects the request (CORS, 404, 502)
+      // --- THIS IS THE UPDATED BLOCK ---
+      if (response.status === 401) {
+        const errText = await response.text();
+        handleLogout();
+        alert(`Server rejected token: ${errText}`);
+        return;
+      }
+      // ---------------------------------
+      
       if (!response.ok) {
         const errText = await response.text();
-        setQuestion(`SERVER ERROR ${response.status}: ${errText}`);
-        setAppState("active");
+        setDebugError(`SERVER REJECTED CONNECTION (${response.status}): ${errText}`);
+        setAppState("error");
         return;
       }
       
       const data = await response.json();
-      setQuestion(data.question);
-      setHistory(prev => [...prev, data.question]);
       
-      // Flash "The Pick is In"
+      if (!data || !data.question) {
+        setDebugError("Server returned empty data. Check Render logs.");
+        setAppState("error");
+        return;
+      }
+
+      setQuestion(data.question);
       setAppState("pick-in");
       
-      // Wait 2.5 seconds, then reveal the question
       setTimeout(() => {
-        setAppState(prev => prev === "time-up" ? "time-up" : "active");
+        setAppState("active");
       }, 2500);
       
     } catch (error: any) {
-      // If the network completely drops, freeze on the active screen and show the error
-      setQuestion(`NETWORK CRASH: ${error.message}. Is your backend deployed?`);
-      setAppState("active");
+      setDebugError(`NETWORK CRASH: ${error.message}`);
+      setAppState("error");
     }
   }
 
@@ -88,7 +104,7 @@ function App() {
     return `0${m}:${s < 10 ? '0' : ''}${s}`
   }
 
-  const isReady = selectedTopic && selectedDiff;
+   isReady = selectedTopic && selectedDiff;
   let btnText = "Select Position & Level";
   if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level";
   if (!selectedTopic && selectedDiff) btnText = "Select Target Position";
