@@ -21,60 +21,74 @@ const DIFFICULTIES = [
 
 function App() {
   const [question, setQuestion] = useState("")
-  const [appState, setAppState] = useState("idle") 
+  const [appState, setAppState] = useState("idle") // idle, loading, pick-in, active, time-up, error
   const [timeLeft, setTimeLeft] = useState(60)
-  
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [selectedDiff, setSelectedDiff] = useState<string | null>(null)
-  
-  // This array remembers every question you generate!
   const [history, setHistory] = useState<string[]>([])
+  
+  // New state to catch exact crash reasons
+  const [debugError, setDebugError] = useState("")
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
-    if (appState !== "idle" && appState !== "time-up" && timeLeft > 0) {
+    if ((appState === "active" || appState === "loading") && timeLeft > 0) {
       timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
-    } else if (timeLeft === 0 && appState !== "idle") {
+    } else if (timeLeft === 0 && appState === "active") {
       setAppState("time-up")
     }
     return () => clearTimeout(timer)
   }, [appState, timeLeft])
 
-  const fetchQuestion = async () => {
+  const fetchQuestion = async (e: React.MouseEvent) => {
+    // 1. Physically stop the browser from refreshing the page!
+    e.preventDefault();
+    e.stopPropagation();
+    
     if (!selectedTopic || !selectedDiff) return;
 
-    setAppState("loading")
-    setTimeLeft(60)
+    setDebugError("");
+    setAppState("loading");
+    setTimeLeft(60);
     
     try {
-      // Changed to POST to send data securely
       const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        method: "POST", // Must match your Python server update
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: selectedTopic,
           difficulty: selectedDiff,
           history: history
         })
-      })
+      });
       
-      const data = await response.json()
-      setQuestion(data.question)
+      if (!response.ok) {
+        const errText = await response.text();
+        setDebugError(`SERVER REJECTED CONNECTION (${response.status}): ${errText}`);
+        setAppState("error");
+        return;
+      }
       
-      // Save this new question to our history log so it doesn't repeat
-      setHistory(prev => [...prev, data.question])
+      const data = await response.json();
+      if (!data || !data.question) {
+        setDebugError("Server returned empty data. Is your OpenAI key working?");
+        setAppState("error");
+        return;
+      }
+
+      setQuestion(data.question);
+      setHistory(prev => [...prev, data.question]);
       
-      setAppState("pick-in")
+      setAppState("pick-in");
+      
       setTimeout(() => {
-        setAppState(prev => prev === "time-up" ? "time-up" : "active")
-      }, 3000)
+        setAppState("active");
+      }, 2500);
       
-    } catch (error) {
-      console.error("Failed to fetch:", error)
-      setQuestion("Error connecting to backend.")
-      setAppState("idle")
+    } catch (error: any) {
+      // 2. If it crashes here, trap it in the "error" state so it can't reset to "idle"
+      setDebugError(`NETWORK CRASH: ${error.message}. Is your Render backend finished deploying?`);
+      setAppState("error");
     }
   }
 
@@ -84,7 +98,6 @@ function App() {
     return `0${m}:${s < 10 ? '0' : ''}${s}`
   }
 
-  // Button logic
   const isReady = selectedTopic && selectedDiff;
   let btnText = "Select Position & Level";
   if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level";
@@ -93,7 +106,6 @@ function App() {
 
   return (
     <div className="draft-container">
-      
       <div className="draft-header">
         <h1>Data Science Draft</h1>
         <p>1st Round Pick</p>
@@ -101,7 +113,8 @@ function App() {
 
       <div className="stage">
         
-        {appState !== "idle" && (
+        {/* Only show clock if we are actively drafting */}
+        {appState !== "idle" && appState !== "error" && (
           <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>
             {formatTime(timeLeft)}
           </div>
@@ -127,6 +140,7 @@ function App() {
             <div className="difficulty-board">
               {DIFFICULTIES.map(diff => (
                 <button
+                  type="button"
                   key={diff.id}
                   className={`diff-btn ${selectedDiff === diff.name ? 'selected' : ''}`}
                   onClick={() => setSelectedDiff(diff.name)}
@@ -137,6 +151,7 @@ function App() {
             </div>
 
             <button 
+              type="button"
               className="draft-button" 
               onClick={fetchQuestion}
               disabled={!isReady}
@@ -172,8 +187,25 @@ function App() {
               <div className="time-up-banner">TIME'S UP. PENCILS DOWN.</div>
             )}
             
-            <button className="reset-button" onClick={() => setAppState("idle")}>
+            <button type="button" className="reset-button" onClick={() => {
+              setAppState("idle");
+              setSelectedTopic(null);
+              setSelectedDiff(null);
+            }}>
               Next Pick
+            </button>
+          </div>
+        )}
+
+        {/* --- CRASH DIAGNOSTIC SCREEN --- */}
+        {appState === "error" && (
+          <div className="active-card" style={{ border: "2px solid #ef4444" }}>
+            <div className="time-up-banner" style={{ marginBottom: "20px" }}>SYSTEM MALFUNCTION</div>
+            <div className="question-box">
+              <p style={{ color: "#ef4444", fontWeight: "bold" }}>{debugError}</p>
+            </div>
+            <button type="button" className="reset-button" onClick={() => setAppState("idle")}>
+              Reset & Try Again
             </button>
           </div>
         )}
