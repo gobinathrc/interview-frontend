@@ -1,50 +1,184 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useState, useEffect } from 'react'
 import './App.css'
+
+const DRAFT_BOARD = [
+  { id: 1, nfl: "The Offensive Line", ds: "SQL & Data Engineering" },
+  { id: 2, nfl: "Scouting Combine", ds: "Descriptive Stats & EDA" },
+  { id: 3, nfl: "Coaches' Challenge", ds: "Inferential Stats & Hypothesis Testing" },
+  { id: 4, nfl: "The Playbook", ds: "Supervised Machine Learning" },
+  { id: 5, nfl: "Zone Coverage", ds: "Unsupervised ML & Anomaly Detection" },
+  { id: 6, nfl: "Clock Management", ds: "Time Series & Forecasting" },
+  { id: 7, nfl: "The Franchise QB", ds: "Deep Learning (DL)" },
+  { id: 8, nfl: "Audibles & Calling", ds: "NLP & Generative AI" },
+  { id: 9, nfl: "The Front Office", ds: "MLOps & Production" }
+]
+
+const DIFFICULTIES = [
+  { id: "easy", name: "Rookie (Easy)" },
+  { id: "medium", name: "Pro-Bowler (Medium)" },
+  { id: "hard", name: "Hall of Famer (Hard)" }
+]
 
 function App() {
   const [question, setQuestion] = useState("")
-  const [loading, setLoading] = useState(false)
+  const [appState, setAppState] = useState("idle") 
+  const [timeLeft, setTimeLeft] = useState(60)
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
+  const [selectedDiff, setSelectedDiff] = useState<string | null>(null)
+  const [history, setHistory] = useState<string[]>([])
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    if (appState === "active" && timeLeft > 0) {
+      timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
+    } else if (timeLeft === 0 && appState === "active") {
+      setAppState("time-up")
+    }
+    return () => clearTimeout(timer)
+  }, [appState, timeLeft])
+
   const fetchQuestion = async () => {
-    setLoading(true)
+    if (!selectedTopic || !selectedDiff) return;
+
+    // Flash "The Pick is In" while making the initial connection
+    setAppState("pick-in")
+    setQuestion("") 
+    
     try {
-      const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question")
-      const data = await response.json()
-      setQuestion(data.question)
-    }
-    catch (error){
+      const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: selectedTopic,
+          difficulty: selectedDiff,
+          history: history
+        })
+      })
+      
+      if (!response.body) throw new Error("No response body");
+      
+      // The second the server connects, show the card and start the clock!
+      setAppState("active")
+      setTimeLeft(60)
+      
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder("utf-8")
+      let fullQuestion = ""
+      
+      // Loop to read the stream word-by-word
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        const chunk = decoder.decode(value, { stream: true })
+        fullQuestion += chunk
+        setQuestion(prev => prev + chunk)
+      }
+      
+      // Save the fully typed question to history to prevent repeats
+      setHistory(prev => [...prev, fullQuestion])
+      
+    } catch (error) {
       console.error("Failed to fetch:", error)
-      setQuestion("Error connecting to backend. Make sure your Python server is running")
+      setQuestion("Error connecting to backend.")
+      setAppState("idle")
     }
-    setLoading(false)
   }
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `0${m}:${s < 10 ? '0' : ''}${s}`
+  }
+
+  const isReady = selectedTopic && selectedDiff;
+  let btnText = "Select Position & Level";
+  if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level";
+  if (!selectedTopic && selectedDiff) btnText = "Select Target Position";
+  if (isReady) btnText = "Make The Pick";
+
   return (
-    <div style={{ maxWidth: "900px", margin: "0 auto", padding: "40px", textAlign: "center", fontFamily: "sans-serif" }}>
-      
-      <h1>The Locker Room Interview</h1>
-      <p style={{ color: "#d71e1e", marginBottom: "40px" }}>Generate highly challenging interview questions.</p>
-      
-      <button
-        type="button"
-        className="counter"
-        onClick={fetchQuestion}
-        disabled={loading}
-        style={{ padding: "14px 28px", fontSize: "18px", cursor: "pointer", borderRadius: "8px" }}
-      >
-        {loading ? " Reviewing the playbook..." : "🏈 Draft Next Question"}
-      </button>
-      
-      {question && (
-        <div style={{ marginTop: "40px", padding: "30px", backgroundColor: "#153015", borderRadius: "12px", border: "2px solid #2ea043", textAlign: "left", boxShadow: "0 4px 6px rgba(234, 87, 87, 0.3)" }}>
-          <p style={{ whiteSpace: "pre-wrap", color: "white", margin: 0, fontSize: "18px", lineHeight: "1.7" }}>
-            {question}
-          </p>
-        </div>
-      )}
-      
+    <div className="draft-container">
+      <div className="draft-header">
+        <h1>Data Science Draft</h1>
+        <p>1st Round Pick</p>
+      </div>
+
+      <div className="stage">
+        
+        {appState === "idle" && (
+          <>
+            <div className="draft-board-title">Target Position on the Board</div>
+            <div className="draft-board">
+              {DRAFT_BOARD.map((item) => (
+                <div 
+                  key={item.id} 
+                  className={`prospect-card ${selectedTopic === item.ds ? 'selected' : ''}`}
+                  onClick={() => setSelectedTopic(item.ds)}
+                >
+                  <div className="nfl-theme">{item.nfl}</div>
+                  <div className="ds-theme">{item.ds}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="draft-board-title">Prospect Level (Difficulty)</div>
+            <div className="difficulty-board">
+              {DIFFICULTIES.map(diff => (
+                <button
+                  key={diff.id}
+                  className={`diff-btn ${selectedDiff === diff.name ? 'selected' : ''}`}
+                  onClick={() => setSelectedDiff(diff.name)}
+                >
+                  {diff.name}
+                </button>
+              ))}
+            </div>
+
+            <button 
+              className="draft-button" 
+              onClick={fetchQuestion}
+              disabled={!isReady}
+              style={{ opacity: isReady ? 1 : 0.5 }}
+            >
+              {btnText}
+            </button>
+          </>
+        )}
+
+        {appState === "pick-in" && (
+          <div className="pick-is-in-banner">
+            <div className="flash-text">THE PICK IS IN</div>
+          </div>
+        )}
+
+        {(appState === "active" || appState === "time-up") && (
+          <div className="active-card">
+            
+            <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>
+              {formatTime(timeLeft)}
+            </div>
+
+            <div className="question-box">
+              <div style={{ color: '#1d4ed8', fontWeight: 'bold', marginBottom: '15px', textTransform: 'uppercase' }}>
+                SCOUTING REPORT: {selectedTopic} ({selectedDiff})
+              </div>
+              <p>{question}</p>
+            </div>
+            
+            {appState === "time-up" && (
+              <div className="time-up-banner">TIME'S UP. PENCILS DOWN.</div>
+            )}
+            
+            <button className="reset-button" onClick={() => setAppState("idle")}>
+              Next Pick
+            </button>
+          </div>
+        )}
+
+      </div>
     </div>
   )
 }
+
 export default App
