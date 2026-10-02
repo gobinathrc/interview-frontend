@@ -29,62 +29,56 @@ function App() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
-    if (appState === "active" && timeLeft > 0) {
+    if (appState !== "idle" && appState !== "time-up" && timeLeft > 0) {
       timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
-    } else if (timeLeft === 0 && appState === "active") {
+    } else if (timeLeft === 0 && appState !== "idle") {
       setAppState("time-up")
     }
     return () => clearTimeout(timer)
   }, [appState, timeLeft])
 
-  const fetchQuestion = async () => {
+  const fetchQuestion = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevents accidental browser page refreshes
     if (!selectedTopic || !selectedDiff) return;
 
-    setAppState("pick-in")
-    setQuestion("") 
+    setAppState("loading")
+    setTimeLeft(60)
     
     try {
       const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
-        method: "POST", // Needs to match the new Python backend
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: selectedTopic,
           difficulty: selectedDiff,
           history: history
         })
-      })
+      });
       
-      // If the server rejects the request, catch it immediately
+      // If the server rejects the request (CORS, 404, 502)
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Server Error ${response.status}: ${errorText}`);
+        const errText = await response.text();
+        setQuestion(`SERVER ERROR ${response.status}: ${errText}`);
+        setAppState("active");
+        return;
       }
       
-      if (!response.body) throw new Error("No response body");
+      const data = await response.json();
+      setQuestion(data.question);
+      setHistory(prev => [...prev, data.question]);
       
-      setAppState("active")
-      setTimeLeft(60)
+      // Flash "The Pick is In"
+      setAppState("pick-in");
       
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder("utf-8")
-      let fullQuestion = ""
-      
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        
-        const chunk = decoder.decode(value, { stream: true })
-        fullQuestion += chunk
-        setQuestion(prev => prev + chunk)
-      }
-      
-      setHistory(prev => [...prev, fullQuestion])
+      // Wait 2.5 seconds, then reveal the question
+      setTimeout(() => {
+        setAppState(prev => prev === "time-up" ? "time-up" : "active");
+      }, 2500);
       
     } catch (error: any) {
-      console.error("Failed to fetch:", error)
-      // Force the screen to stay open and show the exact error!
-      setAppState("active")
-      setQuestion(`ERROR: ${error.message}\n\nPlease check your Render dashboard. Is your Python backend finished deploying?`)
+      // If the network completely drops, freeze on the active screen and show the error
+      setQuestion(`NETWORK CRASH: ${error.message}. Is your backend deployed?`);
+      setAppState("active");
     }
   }
 
@@ -109,6 +103,12 @@ function App() {
 
       <div className="stage">
         
+        {appState !== "idle" && (
+          <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>
+            {formatTime(timeLeft)}
+          </div>
+        )}
+
         {appState === "idle" && (
           <>
             <div className="draft-board-title">Target Position on the Board</div>
@@ -149,6 +149,12 @@ function App() {
           </>
         )}
 
+        {appState === "loading" && (
+          <div className="loading-banner">
+            TEAM IS ON THE CLOCK...
+          </div>
+        )}
+
         {appState === "pick-in" && (
           <div className="pick-is-in-banner">
             <div className="flash-text">THE PICK IS IN</div>
@@ -157,11 +163,6 @@ function App() {
 
         {(appState === "active" || appState === "time-up") && (
           <div className="active-card">
-            
-            <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>
-              {formatTime(timeLeft)}
-            </div>
-
             <div className="question-box">
               <div style={{ color: '#1d4ed8', fontWeight: 'bold', marginBottom: '15px', textTransform: 'uppercase' }}>
                 SCOUTING REPORT: {selectedTopic} ({selectedDiff})
@@ -173,7 +174,11 @@ function App() {
               <div className="time-up-banner">TIME'S UP. PENCILS DOWN.</div>
             )}
             
-            <button className="reset-button" onClick={() => setAppState("idle")}>
+            <button className="reset-button" onClick={() => {
+              setAppState("idle");
+              setSelectedTopic(null);
+              setSelectedDiff(null);
+            }}>
               Next Pick
             </button>
           </div>
