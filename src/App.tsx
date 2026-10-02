@@ -20,14 +20,22 @@ const DIFFICULTIES = [
 ]
 
 function App() {
+  // --- AUTHENTICATION STATE ---
+  const [token, setToken] = useState<string | null>(localStorage.getItem("draft_token"));
+  const [username, setUsername] = useState<string | null>(localStorage.getItem("draft_user"));
+  
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authUsername, setAuthUsername] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // --- DRAFT STATE ---
   const [question, setQuestion] = useState("")
-  const [appState, setAppState] = useState("idle") // idle, loading, pick-in, active, time-up, error
+  const [appState, setAppState] = useState("idle") 
   const [timeLeft, setTimeLeft] = useState(60)
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [selectedDiff, setSelectedDiff] = useState<string | null>(null)
-  const [history, setHistory] = useState<string[]>([])
-  
-  // New state to catch exact crash reasons
   const [debugError, setDebugError] = useState("")
 
   useEffect(() => {
@@ -40,12 +48,58 @@ function App() {
     return () => clearTimeout(timer)
   }, [appState, timeLeft])
 
+  // --- LOGIN & REGISTER LOGIC ---
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError("");
+    setAuthLoading(true);
+    
+    const endpoint = authMode === "login" ? "/login" : "/register";
+    
+    try {
+      const response = await fetch(`https://interview-backend-2-svse.onrender.com${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: authUsername, password: authPassword })
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.detail || "Authentication failed");
+      }
+      
+      if (authMode === "register") {
+        setAuthMode("login");
+        setAuthError("Franchise created! Please log in to the Front Office.");
+      } else {
+        // Successful Login
+        setToken(data.access_token);
+        setUsername(data.username);
+        localStorage.setItem("draft_token", data.access_token);
+        localStorage.setItem("draft_user", data.username);
+      }
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setToken(null);
+    setUsername(null);
+    localStorage.removeItem("draft_token");
+    localStorage.removeItem("draft_user");
+    setAppState("idle");
+  };
+
+  // --- GENERATE QUESTION LOGIC ---
   const fetchQuestion = async (e: React.MouseEvent) => {
-    // 1. Physically stop the browser from refreshing the page!
     e.preventDefault();
     e.stopPropagation();
     
-    if (!selectedTopic || !selectedDiff) return;
+    if (!selectedTopic || !selectedDiff || !token) return;
 
     setDebugError("");
     setAppState("loading");
@@ -53,14 +107,23 @@ function App() {
     
     try {
       const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
-        method: "POST", // Must match your Python server update
-        headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // Securely send the user's token!
+        },
         body: JSON.stringify({
           topic: selectedTopic,
-          difficulty: selectedDiff,
-          history: history
+          difficulty: selectedDiff
+          // We removed 'history' because PostgreSQL handles it automatically now!
         })
       });
+      
+      if (response.status === 401) {
+        handleLogout();
+        alert("Your session expired. Please log in again.");
+        return;
+      }
       
       if (!response.ok) {
         const errText = await response.text();
@@ -70,15 +133,14 @@ function App() {
       }
       
       const data = await response.json();
+      
       if (!data || !data.question) {
-        setDebugError("Server returned empty data. Is your OpenAI key working?");
+        setDebugError("Server returned empty data. Check Render logs.");
         setAppState("error");
         return;
       }
 
       setQuestion(data.question);
-      setHistory(prev => [...prev, data.question]);
-      
       setAppState("pick-in");
       
       setTimeout(() => {
@@ -86,8 +148,7 @@ function App() {
       }, 2500);
       
     } catch (error: any) {
-      // 2. If it crashes here, trap it in the "error" state so it can't reset to "idle"
-      setDebugError(`NETWORK CRASH: ${error.message}. Is your Render backend finished deploying?`);
+      setDebugError(`NETWORK CRASH: ${error.message}`);
       setAppState("error");
     }
   }
@@ -98,6 +159,64 @@ function App() {
     return `0${m}:${s < 10 ? '0' : ''}${s}`
   }
 
+  // If user is not logged in, show the Login/Register Screen
+  if (!token) {
+    return (
+      <div className="draft-container">
+        <div className="draft-header">
+          <h1>Data Science Draft</h1>
+          <p>Front Office Access</p>
+        </div>
+        
+        <div className="auth-container">
+          <form className="auth-card" onSubmit={handleAuth}>
+            <h2>{authMode === "login" ? "GM Login" : "Register Franchise"}</h2>
+            
+            <input 
+              className="auth-input"
+              type="text" 
+              placeholder="Username" 
+              value={authUsername}
+              onChange={(e) => setAuthUsername(e.target.value)}
+              required
+            />
+            
+            <input 
+              className="auth-input"
+              type="password" 
+              placeholder="Password" 
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              required
+            />
+            
+            {authError && (
+              <p style={{ color: authError.includes("created") ? "#10b981" : "#ef4444", marginBottom: "15px" }}>
+                {authError}
+              </p>
+            )}
+            
+            <button className="auth-button" type="submit" disabled={authLoading}>
+              {authLoading ? "Processing..." : (authMode === "login" ? "Enter Draft Room" : "Create Franchise")}
+            </button>
+            
+            <button 
+              className="auth-toggle"
+              type="button" 
+              onClick={() => {
+                setAuthMode(authMode === "login" ? "register" : "login");
+                setAuthError("");
+              }}
+            >
+              {authMode === "login" ? "New GM? Register here." : "Already have a franchise? Log in."}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // --- MAIN DRAFT BOARD (Logged In) ---
   const isReady = selectedTopic && selectedDiff;
   let btnText = "Select Position & Level";
   if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level";
@@ -106,6 +225,8 @@ function App() {
 
   return (
     <div className="draft-container">
+      <button className="logout-btn" onClick={handleLogout}>Log Out</button>
+
       <div className="draft-header">
         <h1>Data Science Draft</h1>
         <p>1st Round Pick</p>
@@ -113,7 +234,6 @@ function App() {
 
       <div className="stage">
         
-        {/* Only show clock if we are actively drafting */}
         {appState !== "idle" && appState !== "error" && (
           <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>
             {formatTime(timeLeft)}
@@ -122,6 +242,8 @@ function App() {
 
         {appState === "idle" && (
           <>
+            <div className="user-greeting">GM {username}'s Draft Board</div>
+
             <div className="draft-board-title">Target Position on the Board</div>
             <div className="draft-board">
               {DRAFT_BOARD.map((item) => (
@@ -197,7 +319,6 @@ function App() {
           </div>
         )}
 
-        {/* --- CRASH DIAGNOSTIC SCREEN --- */}
         {appState === "error" && (
           <div className="active-card" style={{ border: "2px solid #ef4444" }}>
             <div className="time-up-banner" style={{ marginBottom: "20px" }}>SYSTEM MALFUNCTION</div>
