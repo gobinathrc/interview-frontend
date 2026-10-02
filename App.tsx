@@ -40,13 +40,12 @@ function App() {
   const fetchQuestion = async () => {
     if (!selectedTopic || !selectedDiff) return;
 
-    // Flash "The Pick is In" while making the initial connection
     setAppState("pick-in")
     setQuestion("") 
     
     try {
       const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
-        method: "POST",
+        method: "POST", // Needs to match the new Python backend
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           topic: selectedTopic,
@@ -55,9 +54,14 @@ function App() {
         })
       })
       
+      // If the server rejects the request, catch it immediately
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server Error ${response.status}: ${errorText}`);
+      }
+      
       if (!response.body) throw new Error("No response body");
       
-      // The second the server connects, show the card and start the clock!
       setAppState("active")
       setTimeLeft(60)
       
@@ -65,7 +69,6 @@ function App() {
       const decoder = new TextDecoder("utf-8")
       let fullQuestion = ""
       
-      // Loop to read the stream word-by-word
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -75,13 +78,13 @@ function App() {
         setQuestion(prev => prev + chunk)
       }
       
-      // Save the fully typed question to history to prevent repeats
       setHistory(prev => [...prev, fullQuestion])
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch:", error)
-      setQuestion("Error connecting to backend.")
-      setAppState("idle")
+      // Force the screen to stay open and show the exact error!
+      setAppState("active")
+      setQuestion(`ERROR: ${error.message}\n\nPlease check your Render dashboard. Is your Python backend finished deploying?`)
     }
   }
 
