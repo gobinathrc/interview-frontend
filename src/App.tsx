@@ -28,9 +28,19 @@ const DIFFICULTIES = [
   { id: "hard", name: "Hall of Famer (Hard)" }
 ]
 
+interface EvaluationResponse {
+  status: string
+  submission_id?: number
+  is_correct: boolean
+  feedback: string
+  attempt: number
+  attempts_left: number
+  ideal_answer?: string | null
+}
+
 /**
  * Main application component for the Data Science Draft interview platform.
- * Why: Combines NFL draft theme with GM authentication, question drafting, and PostgreSQL answer persistence.
+ * Why: Orchestrates question scouting, candidate responses, AI grading, and 3-attempt progression.
  */
 export function App(): React.JSX.Element {
   // --- AUTHENTICATION STATE ---
@@ -51,11 +61,13 @@ export function App(): React.JSX.Element {
   const [selectedDiff, setSelectedDiff] = useState<string | null>(null)
   const [debugError, setDebugError] = useState("")
 
-  // --- ANSWER SUBMISSION STATE ---
+  // --- 3-ATTEMPT EVALUATION STATE ---
   const [answer, setAnswer] = useState("")
+  const [attempt, setAttempt] = useState<number>(1)
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false)
-  const [submissionSuccess, setSubmissionSuccess] = useState(false)
-  const [submissionId, setSubmissionId] = useState<number | null>(null)
+  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
+  const [feedback, setFeedback] = useState<string>("")
+  const [idealAnswer, setIdealAnswer] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState("")
 
   const BACKEND_URL = "https://interview-backend-2-svse.onrender.com"
@@ -122,13 +134,21 @@ export function App(): React.JSX.Element {
     localStorage.removeItem("draft_token");
     localStorage.removeItem("draft_user");
     setAppState("idle");
+    resetRoundState();
+  };
+
+  const resetRoundState = () => {
     setAnswer("");
-    setSubmissionSuccess(false);
+    setAttempt(1);
+    setIsCorrect(null);
+    setFeedback("");
+    setIdealAnswer(null);
+    setSubmitError("");
   };
 
   /**
    * Requests a new technical question from the backend.
-   * Why: Generates innovative questions tailored to position and difficulty while preventing duplicates.
+   * Why: Generates questions tailored to position and difficulty while preventing duplicates.
    */
   const fetchQuestion = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -139,10 +159,7 @@ export function App(): React.JSX.Element {
     setDebugError("");
     setAppState("loading");
     setTimeLeft(60);
-    setAnswer("");
-    setSubmissionSuccess(false);
-    setSubmissionId(null);
-    setSubmitError("");
+    resetRoundState();
     
     try {
       const response = await fetch(`${BACKEND_URL}/generate_question`, {
@@ -195,8 +212,8 @@ export function App(): React.JSX.Element {
   }
 
   /**
-   * Submits the candidate's answer to the PostgreSQL database linked to active GM user_id.
-   * Why: Permanently stores evaluation responses for auditing and review in DBeaver.
+   * Submits candidate answer to AI judge, grades correctness, and tracks up to 3 tries.
+   * Why: Implements interactive assessment where correct answers or 3 failed attempts reveal ideal solution.
    */
   const handleSubmitAnswer = async () => {
     const trimmed = answer.trim();
@@ -209,7 +226,7 @@ export function App(): React.JSX.Element {
     setSubmitError("");
 
     try {
-      logger.info("Submitting answer to PostgreSQL database...");
+      logger.info(`Evaluating candidate answer for attempt ${attempt} of 3...`);
       const response = await fetch(`${BACKEND_URL}/submit_answer`, {
         method: "POST",
         headers: {
@@ -219,23 +236,36 @@ export function App(): React.JSX.Element {
         body: JSON.stringify({
           question: question,
           answer: trimmed,
+          attempt: attempt,
           topic: selectedTopic,
           difficulty: selectedDiff
         })
       });
 
-      const data = await response.json();
+      const data: EvaluationResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || data.message || `Server error (${response.status})`);
+        throw new Error((data as unknown as { detail?: string }).detail || "Evaluation request failed.");
       }
 
-      setSubmissionSuccess(true);
-      setSubmissionId(data.submission_id ?? null);
-      logger.info("Answer saved. Submission ID:", data.submission_id);
+      setIsCorrect(data.is_correct);
+      setFeedback(data.feedback);
+
+      if (data.is_correct) {
+        setIdealAnswer(data.ideal_answer || null);
+        logger.info("Answer judged CORRECT on attempt:", attempt);
+      } else {
+        if (attempt < 3) {
+          setAttempt(prev => prev + 1);
+          logger.info(`Answer judged INCORRECT. Advancing to attempt ${attempt + 1}`);
+        } else {
+          setIdealAnswer(data.ideal_answer || null);
+          logger.info("3 attempts exhausted. Canonical answer revealed.");
+        }
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : "Submission error"
-      logger.error("Answer submission failed:", errMsg)
+      logger.error("Answer evaluation failed:", errMsg)
       setSubmitError(errMsg);
     } finally {
       setIsSubmittingAnswer(false);
@@ -311,6 +341,8 @@ export function App(): React.JSX.Element {
   if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level";
   if (!selectedTopic && selectedDiff) btnText = "Select Target Position";
   if (isReady) btnText = "Make The Pick";
+
+  const isRoundFinished = isCorrect === true || (isCorrect === false && attempt >= 3 && idealAnswer !== null);
 
   return (
     <div className="draft-container">
@@ -388,13 +420,25 @@ export function App(): React.JSX.Element {
         {(appState === "active" || appState === "time-up") && (
           <div className="active-card">
             <div className="question-box">
-              <div style={{ color: '#1d4ed8', fontWeight: 'bold', marginBottom: '15px', textTransform: 'uppercase' }}>
-                SCOUTING REPORT: {selectedTopic} ({selectedDiff})
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <div style={{ color: '#1d4ed8', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                  SCOUTING REPORT: {selectedTopic} ({selectedDiff})
+                </div>
+                <div style={{ 
+                  background: isCorrect === true ? '#10b981' : (isCorrect === false ? '#f59e0b' : '#3b82f6'), 
+                  color: '#fff', 
+                  fontSize: '12px', 
+                  fontWeight: 'bold', 
+                  padding: '4px 10px', 
+                  borderRadius: '12px' 
+                }}>
+                  {isRoundFinished ? 'EVALUATION COMPLETE' : `TRY ${attempt} OF 3`}
+                </div>
               </div>
               <p>{question}</p>
             </div>
             
-            {/* Answer Input Box & Submit Button */}
+            {/* 3-ATTEMPT INTERACTIVE PLAYBOOK FORM */}
             <div className="answer-section" style={{ marginTop: '20px', textAlign: 'left' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label 
@@ -414,13 +458,13 @@ export function App(): React.JSX.Element {
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder="Formulate your detailed technical response here... Discuss mathematical formulation, algorithmic tradeoffs, and edge cases."
                 rows={6}
-                disabled={isSubmittingAnswer || submissionSuccess}
+                disabled={isSubmittingAnswer || isRoundFinished}
                 style={{
                   width: '100%',
                   boxSizing: 'border-box',
                   padding: '14px',
                   borderRadius: '8px',
-                  border: '1px solid #334155',
+                  border: isCorrect === true ? '2px solid #10b981' : (isCorrect === false ? '2px solid #f59e0b' : '1px solid #334155'),
                   backgroundColor: '#0f172a',
                   color: '#f8fafc',
                   fontSize: '15px',
@@ -431,49 +475,114 @@ export function App(): React.JSX.Element {
                 }}
               />
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  onClick={handleSubmitAnswer}
-                  disabled={isSubmittingAnswer || !answer.trim() || submissionSuccess}
-                  style={{
-                    padding: '10px 24px',
-                    fontSize: '15px',
-                    fontWeight: 'bold',
-                    color: '#ffffff',
-                    backgroundColor: submissionSuccess ? '#10b981' : '#2563eb',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: isSubmittingAnswer || !answer.trim() || submissionSuccess ? 'not-allowed' : 'pointer',
-                    opacity: !answer.trim() ? 0.6 : 1,
-                    transition: 'all 0.2s',
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
-                  }}
-                >
-                  {isSubmittingAnswer 
-                    ? '💾 Storing in PostgreSQL...' 
-                    : (submissionSuccess ? '✅ Answer Stored in Database' : '🚀 Submit Answer')}
-                </button>
-              </div>
+              {!isRoundFinished && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={handleSubmitAnswer}
+                    disabled={isSubmittingAnswer || !answer.trim()}
+                    style={{
+                      padding: '10px 24px',
+                      fontSize: '15px',
+                      fontWeight: 'bold',
+                      color: '#ffffff',
+                      backgroundColor: '#2563eb',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: isSubmittingAnswer || !answer.trim() ? 'not-allowed' : 'pointer',
+                      opacity: !answer.trim() ? 0.6 : 1,
+                      transition: 'all 0.2s',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
+                    }}
+                  >
+                    {isSubmittingAnswer 
+                      ? '⏱️ AI Judge Evaluating...' 
+                      : (isCorrect === false ? `🚀 Try Again (Attempt ${attempt} of 3)` : `🚀 Submit Answer (Attempt ${attempt} of 3)`)}
+                  </button>
+                </div>
+              )}
 
-              {/* Success Badge */}
-              {submissionSuccess && (
+              {/* Feedback Banner: CORRECT */}
+              {isCorrect === true && (
                 <div style={{ 
-                  marginTop: '12px', 
-                  padding: '12px 16px', 
-                  borderRadius: '6px', 
+                  marginTop: '16px', 
+                  padding: '14px 18px', 
+                  borderRadius: '8px', 
                   backgroundColor: 'rgba(16, 185, 129, 0.15)', 
                   border: '1px solid #10b981', 
                   color: '#34d399', 
-                  fontSize: '14px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px' 
+                  fontSize: '14px'
                 }}>
-                  <span>🏈</span>
-                  <span>
-                    <strong>Submission Confirmed!</strong> Saved in PostgreSQL table <code>question_answers</code> (Record #{submissionId} • GM: {username}).
-                  </span>
+                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '6px' }}>
+                    🎯 TOUCHDOWN! ANSWER IS CORRECT
+                  </div>
+                  <div>{feedback}</div>
+                </div>
+              )}
+
+              {/* Feedback Banner: INCORRECT (Attempt 1 or 2 - Retry permitted) */}
+              {isCorrect === false && !isRoundFinished && (
+                <div style={{ 
+                  marginTop: '16px', 
+                  padding: '14px 18px', 
+                  borderRadius: '8px', 
+                  backgroundColor: 'rgba(245, 158, 11, 0.15)', 
+                  border: '1px solid #f59e0b', 
+                  color: '#fbbf24', 
+                  fontSize: '14px'
+                }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '6px' }}>
+                    ⚠️ INCOMPLETE / INCORRECT ({4 - attempt} tries remaining)
+                  </div>
+                  <div style={{ marginBottom: '6px' }}>{feedback}</div>
+                  <div style={{ fontSize: '13px', color: '#fde68a' }}>
+                    💡 <em>Coaching Hint: Review the feedback above, refine your answer in the box, and click Try Again!</em>
+                  </div>
+                </div>
+              )}
+
+              {/* Feedback Banner: FAILED 3 TRIES */}
+              {isCorrect === false && isRoundFinished && (
+                <div style={{ 
+                  marginTop: '16px', 
+                  padding: '14px 18px', 
+                  borderRadius: '8px', 
+                  backgroundColor: 'rgba(239, 68, 68, 0.15)', 
+                  border: '1px solid #ef4444', 
+                  color: '#f87171', 
+                  fontSize: '14px'
+                }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '6px' }}>
+                    ❌ TURNOVER ON DOWNS (All 3 Tries Used)
+                  </div>
+                  <div>{feedback}</div>
+                </div>
+              )}
+
+              {/* Canonical Ideal Answer Card (Revealed on Correct or 3rd strike) */}
+              {idealAnswer && (
+                <div style={{ 
+                  marginTop: '16px', 
+                  padding: '16px 20px', 
+                  borderRadius: '10px', 
+                  backgroundColor: 'rgba(30, 41, 59, 0.85)', 
+                  border: '1px solid #3b82f6', 
+                  color: '#f8fafc',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.4)'
+                }}>
+                  <div style={{ 
+                    color: '#60a5fa', 
+                    fontWeight: 700, 
+                    fontSize: '14px', 
+                    letterSpacing: '1px', 
+                    textTransform: 'uppercase', 
+                    marginBottom: '8px' 
+                  }}>
+                    📖 The Ideal Playbook Solution:
+                  </div>
+                  <div style={{ fontSize: '15px', lineHeight: '1.7', color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
+                    {idealAnswer}
+                  </div>
                 </div>
               )}
 
@@ -504,10 +613,7 @@ export function App(): React.JSX.Element {
                 setAppState("idle");
                 setSelectedTopic(null);
                 setSelectedDiff(null);
-                setAnswer("");
-                setSubmissionSuccess(false);
-                setSubmissionId(null);
-                setSubmitError("");
+                resetRoundState();
               }}
             >
               Next Pick
