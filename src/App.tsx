@@ -94,7 +94,7 @@ function App() {
     setAppState("idle");
   };
 
-  // --- GENERATE QUESTION LOGIC ---
+    // --- GENERATE QUESTION LOGIC ---
   const fetchQuestion = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -110,20 +110,22 @@ function App() {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // Securely send the user's token!
+          "Authorization": `Bearer ${token}` 
         },
         body: JSON.stringify({
           topic: selectedTopic,
           difficulty: selectedDiff
-          // We removed 'history' because PostgreSQL handles it automatically now!
         })
       });
       
+      // --- THIS IS THE UPDATED BLOCK ---
       if (response.status === 401) {
+        const errText = await response.text();
         handleLogout();
-        alert("Your session expired. Please log in again.");
+        alert(`Server rejected token: ${errText}`);
         return;
       }
+      // ---------------------------------
       
       if (!response.ok) {
         const errText = await response.text();
@@ -152,7 +154,6 @@ function App() {
       setAppState("error");
     }
   }
-
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60)
     const s = seconds % 60
