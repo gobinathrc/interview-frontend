@@ -1,339 +1,391 @@
-import { useState, useEffect } from 'react'
-import './App.css'
+import React, { useState } from 'react'
 
-const DRAFT_BOARD = [
-  { id: 1, nfl: "The Offensive Line", ds: "SQL & Data Engineering" },
-  { id: 2, nfl: "Scouting Combine", ds: "Descriptive Stats & EDA" },
-  { id: 3, nfl: "Coaches' Challenge", ds: "Inferential Stats & Hypothesis Testing" },
-  { id: 4, nfl: "The Playbook", ds: "Supervised Machine Learning" },
-  { id: 5, nfl: "Zone Coverage", ds: "Unsupervised ML & Anomaly Detection" },
-  { id: 6, nfl: "Clock Management", ds: "Time Series & Forecasting" },
-  { id: 7, nfl: "The Franchise QB", ds: "Deep Learning (DL)" },
-  { id: 8, nfl: "Audibles & Calling", ds: "NLP & Generative AI" },
-  { id: 9, nfl: "The Front Office", ds: "MLOps & Production" }
-]
+/**
+ * Dedicated production logger interface.
+ * Why: Adheres to clean code standards by eliminating unformatted console statements in production.
+ */
+const logger = {
+  info: (msg: string, ...args: unknown[]) => console.info(`[DS-Draft INFO] ${msg}`, ...args),
+  warn: (msg: string, ...args: unknown[]) => console.warn(`[DS-Draft WARN] ${msg}`, ...args),
+  error: (msg: string, ...args: unknown[]) => console.error(`[DS-Draft ERROR] ${msg}`, ...args),
+}
 
-const DIFFICULTIES = [
-  { id: "easy", name: "Rookie (Easy)" },
-  { id: "medium", name: "Pro-Bowler (Medium)" },
-  { id: "hard", name: "Hall of Famer (Hard)" }
-]
+interface SubmissionResponse {
+  status: string
+  message: string
+  submission_id?: number
+  created_at?: string
+}
 
-function App() {
-  // --- AUTHENTICATION STATE ---
-  const [token, setToken] = useState<string | null>(localStorage.getItem("draft_token"));
-  const [username, setUsername] = useState<string | null>(localStorage.getItem("draft_user"));
-  
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [authUsername, setAuthUsername] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
+/**
+ * Main application component for the Data Science Draft interview platform.
+ * Why: Orchestrates dynamic question generation, candidate input state, and PostgreSQL submission.
+ */
+export function App(): React.JSX.Element {
+  const [question, setQuestion] = useState<string>('')
+  const [answer, setAnswer] = useState<string>('')
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState<boolean>(false)
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
+  const [submissionStatus, setSubmissionStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [statusMessage, setStatusMessage] = useState<string>('')
+  const [submissionId, setSubmissionId] = useState<number | null>(null)
 
-  // --- DRAFT STATE ---
-  const [question, setQuestion] = useState("")
-  const [appState, setAppState] = useState("idle") 
-  const [timeLeft, setTimeLeft] = useState(60)
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
-  const [selectedDiff, setSelectedDiff] = useState<string | null>(null)
-  const [debugError, setDebugError] = useState("")
+  const BACKEND_URL = 'https://interview-backend-2-svse.onrender.com'
 
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>
-    if ((appState === "active" || appState === "loading") && timeLeft > 0) {
-      timer = setTimeout(() => setTimeLeft(prev => prev - 1), 1000)
-    } else if (timeLeft === 0 && appState === "active") {
-      setAppState("time-up")
-    }
-    return () => clearTimeout(timer)
-  }, [appState, timeLeft])
+  /**
+   * Fetches a newly generated data science interview question from the backend.
+   * Why: Solicits unprompted, high-challenge technical evaluations from the AI scout.
+   */
+  const handleFetchQuestion = async (): Promise<void> => {
+    setIsLoadingQuestion(true)
+    setSubmissionStatus('idle')
+    setStatusMessage('')
+    setAnswer('')
 
-  // --- LOGIN & REGISTER LOGIC ---
-  const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError("");
-    setAuthLoading(true);
-    
-    const endpoint = authMode === "login" ? "/login" : "/register";
-    
     try {
-      const response = await fetch(`https://interview-backend-2-svse.onrender.com${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: authUsername, password: authPassword })
-      });
-      
-      const data = await response.json();
-      
+      logger.info('Requesting fresh question from backend...')
+      const response = await fetch(`${BACKEND_URL}/generate_question`)
       if (!response.ok) {
-        throw new Error(data.detail || "Authentication failed");
+        throw new Error(`Server returned HTTP ${response.status}`)
       }
-      
-      if (authMode === "register") {
-        setAuthMode("login");
-        setAuthError("Franchise created! Please log in to the Front Office.");
-      } else {
-        // Successful Login
-        setToken(data.access_token);
-        setUsername(data.username);
-        localStorage.setItem("draft_token", data.access_token);
-        localStorage.setItem("draft_user", data.username);
-      }
-    } catch (err: any) {
-      setAuthError(err.message);
+      const data = await response.json()
+      setQuestion(data.question)
+      logger.info('Question received successfully')
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown network error'
+      logger.error('Failed to fetch question:', errMsg)
+      setQuestion('Unable to connect to backend server. Verify the Render service is running.')
     } finally {
-      setAuthLoading(false);
+      setIsLoadingQuestion(false)
     }
-  };
+  }
 
-  const handleLogout = () => {
-    setToken(null);
-    setUsername(null);
-    localStorage.removeItem("draft_token");
-    localStorage.removeItem("draft_user");
-    setAppState("idle");
-  };
+  /**
+   * Dispatches candidate answer to the PostgreSQL backend database.
+   * Why: Permanently stores responses with relational question context for auditing.
+   */
+  const handleSubmitAnswer = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault()
 
-  // --- GENERATE QUESTION LOGIC ---
-  const fetchQuestion = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!selectedTopic || !selectedDiff || !token) return;
+    const trimmedAnswer = answer.trim()
+    if (!trimmedAnswer) {
+      setSubmissionStatus('error')
+      setStatusMessage('Please enter an answer before submitting.')
+      return
+    }
 
-    setDebugError("");
-    setAppState("loading");
-    setTimeLeft(60);
-    
+    setIsSubmitting(true)
+    setSubmissionStatus('idle')
+    setStatusMessage('')
+
     try {
-      const response = await fetch("https://interview-backend-2-svse.onrender.com/generate_question", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // Securely send the user's token!
+      logger.info('Submitting candidate response to PostgreSQL...')
+      const response = await fetch(`${BACKEND_URL}/submit_answer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          topic: selectedTopic,
-          difficulty: selectedDiff
-          // We removed 'history' because PostgreSQL handles it automatically now!
-        })
-      });
-      
-      if (response.status === 401) {
-        handleLogout();
-        alert("Your session expired. Please log in again.");
-        return;
-      }
-      
+          question: question,
+          answer: trimmedAnswer,
+        }),
+      })
+
+      const data: SubmissionResponse = await response.json()
+
       if (!response.ok) {
-        const errText = await response.text();
-        setDebugError(`SERVER REJECTED CONNECTION (${response.status}): ${errText}`);
-        setAppState("error");
-        return;
-      }
-      
-      const data = await response.json();
-      
-      if (!data || !data.question) {
-        setDebugError("Server returned empty data. Check Render logs.");
-        setAppState("error");
-        return;
+        throw new Error(data.message || `Server responded with status ${response.status}`)
       }
 
-      setQuestion(data.question);
-      setAppState("pick-in");
-      
-      setTimeout(() => {
-        setAppState("active");
-      }, 2500);
-      
-    } catch (error: any) {
-      setDebugError(`NETWORK CRASH: ${error.message}`);
-      setAppState("error");
+      setSubmissionStatus('success')
+      setStatusMessage('Answer saved to PostgreSQL database!')
+      setSubmissionId(data.submission_id ?? null)
+      logger.info('Submission confirmed. Record ID:', data.submission_id)
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Submission failed'
+      logger.error('Failed to persist answer:', errMsg)
+      setSubmissionStatus('error')
+      setStatusMessage(`Error saving response: ${errMsg}`)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60)
-    const s = seconds % 60
-    return `0${m}:${s < 10 ? '0' : ''}${s}`
-  }
-
-  // If user is not logged in, show the Login/Register Screen
-  if (!token) {
-    return (
-      <div className="draft-container">
-        <div className="draft-header">
-          <h1>Data Science Draft</h1>
-          <p>Front Office Access</p>
-        </div>
-        
-        <div className="auth-container">
-          <form className="auth-card" onSubmit={handleAuth}>
-            <h2>{authMode === "login" ? "GM Login" : "Register Franchise"}</h2>
-            
-            <input 
-              className="auth-input"
-              type="text" 
-              placeholder="Username" 
-              value={authUsername}
-              onChange={(e) => setAuthUsername(e.target.value)}
-              required
-            />
-            
-            <input 
-              className="auth-input"
-              type="password" 
-              placeholder="Password" 
-              value={authPassword}
-              onChange={(e) => setAuthPassword(e.target.value)}
-              required
-            />
-            
-            {authError && (
-              <p style={{ color: authError.includes("created") ? "#10b981" : "#ef4444", marginBottom: "15px" }}>
-                {authError}
-              </p>
-            )}
-            
-            <button className="auth-button" type="submit" disabled={authLoading}>
-              {authLoading ? "Processing..." : (authMode === "login" ? "Enter Draft Room" : "Create Franchise")}
-            </button>
-            
-            <button 
-              className="auth-toggle"
-              type="button" 
-              onClick={() => {
-                setAuthMode(authMode === "login" ? "register" : "login");
-                setAuthError("");
-              }}
-            >
-              {authMode === "login" ? "New GM? Register here." : "Already have a franchise? Log in."}
-            </button>
-          </form>
-        </div>
-      </div>
-    )
-  }
-
-  // --- MAIN DRAFT BOARD (Logged In) ---
-  const isReady = selectedTopic && selectedDiff;
-  let btnText = "Select Position & Level";
-  if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level";
-  if (!selectedTopic && selectedDiff) btnText = "Select Target Position";
-  if (isReady) btnText = "Make The Pick";
-
   return (
-    <div className="draft-container">
-      <button className="logout-btn" onClick={handleLogout}>Log Out</button>
+    <div style={styles.pageContainer}>
+      <header style={styles.header}>
+        <div style={styles.pillBadge}>🏈 THE FRONT OFFICE COMBINE</div>
+        <h1 style={styles.mainTitle}>
+          DATA SCIENCE <span style={styles.accentText}>DRAFT</span>
+        </h1>
+        <p style={styles.subtitle}>
+          Generate industry-grade AI interview challenges and log your responses directly into PostgreSQL.
+        </p>
 
-      <div className="draft-header">
-        <h1>Data Science Draft</h1>
-        <p>1st Round Pick</p>
-      </div>
+        <button
+          type="button"
+          onClick={handleFetchQuestion}
+          disabled={isLoadingQuestion}
+          style={{
+            ...styles.primaryButton,
+            opacity: isLoadingQuestion ? 0.7 : 1,
+            cursor: isLoadingQuestion ? 'not-allowed' : 'pointer',
+          }}
+          aria-label="Draft next interview question"
+        >
+          {isLoadingQuestion ? '⏱️ Scouting Next Question...' : '🏈 Draft Next Question'}
+        </button>
+      </header>
 
-      <div className="stage">
-        
-        {appState !== "idle" && appState !== "error" && (
-          <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>
-            {formatTime(timeLeft)}
-          </div>
-        )}
-
-        {appState === "idle" && (
-          <>
-            <div className="user-greeting">GM {username}'s Draft Board</div>
-
-            <div className="draft-board-title">Target Position on the Board</div>
-            <div className="draft-board">
-              {DRAFT_BOARD.map((item) => (
-                <div 
-                  key={item.id} 
-                  className={`prospect-card ${selectedTopic === item.ds ? 'selected' : ''}`}
-                  onClick={() => setSelectedTopic(item.ds)}
-                >
-                  <div className="nfl-theme">{item.nfl}</div>
-                  <div className="ds-theme">{item.ds}</div>
-                </div>
-              ))}
+      <main style={styles.mainContent}>
+        {question && (
+          <section style={styles.glassCard} aria-labelledby="question-heading">
+            <div style={styles.cardHeader}>
+              <span style={styles.cardTag}>ON THE CLOCK</span>
+              <h2 id="question-heading" style={styles.sectionTitle}>
+                The Interview Challenge
+              </h2>
             </div>
+            <p style={styles.questionText}>{question}</p>
 
-            <div className="draft-board-title">Prospect Level (Difficulty)</div>
-            <div className="difficulty-board">
-              {DIFFICULTIES.map(diff => (
-                <button
-                  type="button"
-                  key={diff.id}
-                  className={`diff-btn ${selectedDiff === diff.name ? 'selected' : ''}`}
-                  onClick={() => setSelectedDiff(diff.name)}
-                >
-                  {diff.name}
-                </button>
-              ))}
-            </div>
-
-            <button 
-              type="button"
-              className="draft-button" 
-              onClick={fetchQuestion}
-              disabled={!isReady}
-              style={{ opacity: isReady ? 1 : 0.5 }}
-            >
-              {btnText}
-            </button>
-          </>
-        )}
-
-        {appState === "loading" && (
-          <div className="loading-banner">
-            TEAM IS ON THE CLOCK...
-          </div>
-        )}
-
-        {appState === "pick-in" && (
-          <div className="pick-is-in-banner">
-            <div className="flash-text">THE PICK IS IN</div>
-          </div>
-        )}
-
-        {(appState === "active" || appState === "time-up") && (
-          <div className="active-card">
-            <div className="question-box">
-              <div style={{ color: '#1d4ed8', fontWeight: 'bold', marginBottom: '15px', textTransform: 'uppercase' }}>
-                SCOUTING REPORT: {selectedTopic} ({selectedDiff})
+            <form onSubmit={handleSubmitAnswer} style={styles.formContainer}>
+              <div style={styles.inputHeader}>
+                <label htmlFor="answer-input" style={styles.inputLabel}>
+                  Your Technical Response:
+                </label>
+                <span style={styles.charCounter}>
+                  {answer.length} characters
+                </span>
               </div>
-              <p>{question}</p>
-            </div>
-            
-            {appState === "time-up" && (
-              <div className="time-up-banner">TIME'S UP. PENCILS DOWN.</div>
-            )}
-            
-            <button type="button" className="reset-button" onClick={() => {
-              setAppState("idle");
-              setSelectedTopic(null);
-              setSelectedDiff(null);
-            }}>
-              Next Pick
-            </button>
-          </div>
-        )}
 
-        {appState === "error" && (
-          <div className="active-card" style={{ border: "2px solid #ef4444" }}>
-            <div className="time-up-banner" style={{ marginBottom: "20px" }}>SYSTEM MALFUNCTION</div>
-            <div className="question-box">
-              <p style={{ color: "#ef4444", fontWeight: "bold" }}>{debugError}</p>
-            </div>
-            <button type="button" className="reset-button" onClick={() => setAppState("idle")}>
-              Reset & Try Again
-            </button>
-          </div>
-        )}
+              <textarea
+                id="answer-input"
+                value={answer}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAnswer(e.target.value)}
+                placeholder="Formulate your detailed technical response here... Discuss architectural tradeoffs, assumptions, and complexity analysis."
+                rows={6}
+                disabled={isSubmitting}
+                style={styles.textarea}
+                aria-required="true"
+              />
 
-      </div>
+              <div style={styles.actionsRow}>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !answer.trim()}
+                  style={{
+                    ...styles.submitButton,
+                    opacity: isSubmitting || !answer.trim() ? 0.6 : 1,
+                    cursor: isSubmitting || !answer.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                  aria-busy={isSubmitting}
+                >
+                  {isSubmitting ? '💾 Storing in PostgreSQL...' : '🚀 Submit Answer'}
+                </button>
+              </div>
+
+              {submissionStatus === 'success' && (
+                <div style={styles.successBanner} role="status">
+                  <span style={styles.badgeIcon}>✅</span>
+                  <div>
+                    <strong>{statusMessage}</strong>
+                    {submissionId && (
+                      <span style={styles.metaNote}> (Database Record #{submissionId})</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {submissionStatus === 'error' && (
+                <div style={styles.errorBanner} role="alert">
+                  <span style={styles.badgeIcon}>⚠️</span>
+                  <span>{statusMessage}</span>
+                </div>
+              )}
+            </form>
+          </section>
+        )}
+      </main>
     </div>
   )
+}
+
+const styles: Record<string, React.CSSProperties> = {
+  pageContainer: {
+    minHeight: '100vh',
+    backgroundColor: '#05080f',
+    color: '#f8fafc',
+    fontFamily: '"Inter", system-ui, -apple-system, sans-serif',
+    padding: '40px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  header: {
+    maxWidth: '850px',
+    width: '100%',
+    textAlign: 'center',
+    marginBottom: '40px',
+  },
+  pillBadge: {
+    display: 'inline-block',
+    padding: '6px 14px',
+    borderRadius: '9999px',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    border: '1px solid rgba(59, 130, 246, 0.35)',
+    color: '#60a5fa',
+    fontSize: '0.85rem',
+    fontWeight: 700,
+    letterSpacing: '1.5px',
+    marginBottom: '18px',
+  },
+  mainTitle: {
+    fontSize: '3rem',
+    fontWeight: 800,
+    letterSpacing: '-1px',
+    margin: '0 0 16px 0',
+    lineHeight: 1.1,
+  },
+  accentText: {
+    color: '#3b82f6',
+  },
+  subtitle: {
+    fontSize: '1.15rem',
+    color: '#94a3b8',
+    marginBottom: '32px',
+    lineHeight: 1.6,
+  },
+  primaryButton: {
+    padding: '14px 32px',
+    fontSize: '1.1rem',
+    fontWeight: 700,
+    color: '#0f172a',
+    backgroundColor: '#fbbf24',
+    border: 'none',
+    borderRadius: '12px',
+    boxShadow: '0 10px 25px -5px rgba(251, 191, 36, 0.4)',
+    transition: 'all 0.2s ease',
+  },
+  mainContent: {
+    maxWidth: '850px',
+    width: '100%',
+  },
+  glassCard: {
+    background: 'rgba(15, 23, 42, 0.75)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    borderRadius: '16px',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+    padding: '36px',
+  },
+  cardHeader: {
+    marginBottom: '16px',
+  },
+  cardTag: {
+    fontSize: '0.75rem',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    color: '#fbbf24',
+    textTransform: 'uppercase',
+  },
+  sectionTitle: {
+    fontSize: '1.6rem',
+    fontWeight: 700,
+    margin: '6px 0 0 0',
+    color: '#f8fafc',
+  },
+  questionText: {
+    fontSize: '1.15rem',
+    lineHeight: 1.8,
+    color: '#e2e8f0',
+    whiteSpace: 'pre-wrap',
+    padding: '20px',
+    backgroundColor: 'rgba(2, 6, 23, 0.6)',
+    borderRadius: '10px',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+    marginBottom: '28px',
+  },
+  formContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  inputHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  inputLabel: {
+    fontSize: '1rem',
+    fontWeight: 600,
+    color: '#cbd5e1',
+  },
+  charCounter: {
+    fontSize: '0.85rem',
+    color: '#64748b',
+  },
+  textarea: {
+    width: '100%',
+    boxSizing: 'border-box',
+    padding: '16px',
+    fontSize: '1rem',
+    color: '#f8fafc',
+    backgroundColor: 'rgba(2, 6, 23, 0.8)',
+    border: '1px solid #334155',
+    borderRadius: '10px',
+    resize: 'vertical',
+    fontFamily: 'inherit',
+    lineHeight: 1.6,
+    outline: 'none',
+  },
+  actionsRow: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginTop: '6px',
+  },
+  submitButton: {
+    padding: '12px 26px',
+    fontSize: '1rem',
+    fontWeight: 600,
+    color: '#ffffff',
+    backgroundColor: '#2563eb',
+    border: 'none',
+    borderRadius: '10px',
+    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)',
+    transition: 'all 0.2s ease',
+  },
+  successBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '14px 18px',
+    borderRadius: '10px',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    border: '1px solid rgba(16, 185, 129, 0.3)',
+    color: '#34d399',
+    marginTop: '12px',
+    fontSize: '0.95rem',
+  },
+  errorBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '14px 18px',
+    borderRadius: '10px',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+    color: '#f87171',
+    marginTop: '12px',
+    fontSize: '0.95rem',
+  },
+  badgeIcon: {
+    fontSize: '1.2rem',
+  },
+  metaNote: {
+    color: '#a7f3d0',
+    fontSize: '0.85rem',
+  },
 }
 
 export default App
