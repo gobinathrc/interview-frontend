@@ -7,27 +7,27 @@ const logger = {
 }
 
 const DRAFT_BOARD = [
-  { id: 1, nfl: "The Offensive Line",  ds: "SQL & Data Engineering" },
-  { id: 2, nfl: "Scouting Combine",    ds: "Descriptive Stats & EDA" },
-  { id: 3, nfl: "Coaches' Challenge",  ds: "Inferential Stats & Hypothesis Testing" },
-  { id: 4, nfl: "The Playbook",        ds: "Supervised Machine Learning" },
-  { id: 5, nfl: "Zone Coverage",       ds: "Unsupervised ML & Anomaly Detection" },
-  { id: 6, nfl: "Clock Management",    ds: "Time Series & Forecasting" },
-  { id: 7, nfl: "The Franchise QB",    ds: "Deep Learning (DL)" },
-  { id: 8, nfl: "Audibles & Calling",  ds: "NLP & Generative AI" },
-  { id: 9, nfl: "The Front Office",    ds: "MLOps & Production" }
+  { id: 1, icon: "🛡️", pos: "OL", nfl: "The Offensive Line",  ds: "SQL & Data Engineering" },
+  { id: 2, icon: "⚡", pos: "CB", nfl: "Scouting Combine",    ds: "Descriptive Stats & EDA" },
+  { id: 3, icon: "🚩", pos: "HC", nfl: "Coaches' Challenge",  ds: "Inferential Stats & Hypotheses" },
+  { id: 4, icon: "📋", pos: "OC", nfl: "The Playbook",        ds: "Supervised Machine Learning" },
+  { id: 5, icon: "🔒", pos: "FS", nfl: "Zone Coverage",       ds: "Unsupervised & Anomaly Detection" },
+  { id: 6, icon: "⏱️", pos: "ST", nfl: "Clock Management",    ds: "Time Series & Forecasting" },
+  { id: 7, icon: "🏈", pos: "QB", nfl: "The Franchise QB",    ds: "Deep Learning (DL)" },
+  { id: 8, icon: "📢", pos: "DC", nfl: "Audibles & Calling",  ds: "NLP & Generative AI" },
+  { id: 9, icon: "🏢", pos: "GM", nfl: "The Front Office",    ds: "MLOps & System Architecture" }
 ]
 
 const DIFFICULTIES = [
-  { id: "easy",   name: "Rookie (Easy)" },
-  { id: "medium", name: "Pro-Bowler (Medium)" },
-  { id: "hard",   name: "Hall of Famer (Hard)" }
+  { id: "easy",   name: "Rookie (Easy)",           title: "Rookie",         sub: "Foundations" },
+  { id: "medium", name: "Pro-Bowler (Medium)",     title: "Pro-Bowler",     sub: "Production Depth" },
+  { id: "hard",   name: "Hall of Famer (Hard)",    title: "Hall of Famer",  sub: "Architectural Rigor" }
 ]
 
 interface EvaluationResponse {
   status: string
   submission_id?: number
-  score: number
+  score?: number
   is_correct: boolean
   feedback: string
   attempt: number
@@ -55,7 +55,7 @@ interface ScoutingReport {
 function getOrCreateGuestId(): string {
   let gid = localStorage.getItem("draft_guest_id")
   if (!gid) {
-    gid = "guest_" + Math.random().toString(36).substring(2, 10) + "_" + Date.now().toString(36)
+    gid = "guest_" + Math.random().toString(36).substring(2, 8)
     localStorage.setItem("draft_guest_id", gid)
   }
   return gid
@@ -63,37 +63,36 @@ function getOrCreateGuestId(): string {
 
 function getScoreMeta(score: number): { color: string; barColor: string; grade: string; emoji: string } {
   if (score >= 90) return { color: '#10b981', barColor: '#10b981', grade: 'S — Elite First-Round Lock', emoji: '🏆' }
-  if (score >= 70) return { color: '#3b82f6', barColor: '#3b82f6', grade: 'A — Starter Grade',          emoji: '🏈' }
+  if (score >= 70) return { color: '#38bdf8', barColor: '#38bdf8', grade: 'A — Starter Grade',          emoji: '🏈' }
   if (score >= 50) return { color: '#f59e0b', barColor: '#f59e0b', grade: 'B — Practice Squad',         emoji: '⚠️' }
   if (score >= 25) return { color: '#f97316', barColor: '#f97316', grade: 'C — Training Camp',          emoji: '📋' }
-  return                { color: '#ef4444', barColor: '#ef4444', grade: 'D — Cut Day Risk',            emoji: '🛑' }
+  return                { color: '#f43f5e', barColor: '#f43f5e', grade: 'D — Cut Day Risk',            emoji: '🛑' }
 }
 
-/** Animated score arc/gauge component */
 function ScoreGauge({ score }: { score: number }) {
   const meta = getScoreMeta(score)
-  const radius = 50
+  const radius = 48
   const circumference = 2 * Math.PI * radius
   const filled = (Math.max(0, Math.min(100, score)) / 100) * circumference
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '15px 0' }}>
-      <svg width="130" height="130" viewBox="0 0 130 130">
-        <circle cx="65" cy="65" r={radius} fill="none" stroke="#1e293b" strokeWidth="10" />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '14px 0 6px' }}>
+      <svg width="124" height="124" viewBox="0 0 124 124">
+        <circle cx="62" cy="62" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10" />
         <circle
-          cx="65" cy="65" r={radius}
+          cx="62" cy="62" r={radius}
           fill="none"
           stroke={meta.barColor}
           strokeWidth="10"
           strokeDasharray={`${filled} ${circumference}`}
           strokeLinecap="round"
-          transform="rotate(-90 65 65)"
-          style={{ transition: 'stroke-dasharray 1s ease' }}
+          transform="rotate(-90 62 62)"
+          style={{ transition: 'stroke-dasharray 0.9s cubic-bezier(0.4, 0, 0.2, 1)' }}
         />
-        <text x="65" y="60" textAnchor="middle" fill="#f8fafc" fontSize="28" fontWeight="800">{score}</text>
-        <text x="65" y="78" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="600">/ 100</text>
+        <text x="62" y="58" textAnchor="middle" fill="#f8fafc" fontSize="28" fontWeight="900" fontFamily="Plus Jakarta Sans, sans-serif">{score}</text>
+        <text x="62" y="76" textAnchor="middle" fill="#94a3b8" fontSize="12" fontWeight="600" fontFamily="Plus Jakarta Sans, sans-serif">OUT OF 100</text>
       </svg>
-      <div style={{ color: meta.color, fontWeight: 700, fontSize: '14px', marginTop: '4px' }}>
+      <div style={{ color: meta.color, fontWeight: 800, fontSize: '13px', letterSpacing: '0.04em', marginTop: '6px' }}>
         {meta.emoji} {meta.grade}
       </div>
     </div>
@@ -101,7 +100,7 @@ function ScoreGauge({ score }: { score: number }) {
 }
 
 export function App(): React.JSX.Element {
-  // --- AUTH & GUEST IDENTITY ---
+  // --- AUTH & GUEST STATE ---
   const [token, setToken] = useState<string | null>(localStorage.getItem("draft_token"))
   const [username, setUsername] = useState<string | null>(localStorage.getItem("draft_user"))
   const [isGuest, setIsGuest] = useState<boolean>(!localStorage.getItem("draft_token") && localStorage.getItem("draft_mode") === "guest")
@@ -117,17 +116,17 @@ export function App(): React.JSX.Element {
   const [question, setQuestion] = useState("")
   const [appState, setAppState] = useState("idle")
   const [timeLeft, setTimeLeft] = useState(60)
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
-  const [selectedDiff, setSelectedDiff] = useState<string | null>(null)
+  const [selectedTopic, setSelectedTopic] = useState<string | null>("SQL & Data Engineering")
+  const [selectedDiff, setSelectedDiff] = useState<string | null>("Rookie (Easy)")
   const [debugError, setDebugError] = useState("")
 
-  // --- SCORING & EVALUATION STATE ---
+  // --- 3-ATTEMPT & SCORING EVALUATION STATE ---
   const [answer, setAnswer] = useState("")
-  const [attempt, setAttempt] = useState(1)
+  const [attempt, setAttempt] = useState<number>(1)
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false)
   const [score, setScore] = useState<number | null>(null)
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
-  const [feedback, setFeedback] = useState("")
+  const [feedback, setFeedback] = useState<string>("")
   const [idealAnswer, setIdealAnswer] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState("")
 
@@ -164,16 +163,17 @@ export function App(): React.JSX.Element {
     setAuthLoading(true)
     const endpoint = authMode === "login" ? "/login" : "/register"
     try {
-      const res = await fetch(`${BACKEND_URL}${endpoint}`, {
+      const response = await fetch(`${BACKEND_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: authUsername.trim(), password: authPassword })
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || "Authentication failed")
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.detail || "Authentication failed")
+
       if (authMode === "register") {
         setAuthMode("login")
-        setAuthError("Franchise created! Please log in to the Front Office.")
+        setAuthError("Franchise established! Please sign in with your GM credentials.")
       } else {
         setToken(data.access_token)
         setUsername(data.username)
@@ -183,9 +183,9 @@ export function App(): React.JSX.Element {
         localStorage.removeItem("draft_mode")
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Authentication error"
-      logger.error("Auth:", msg)
-      setAuthError(msg)
+      const errMsg = err instanceof Error ? err.message : "Authentication error"
+      logger.error("Auth error:", errMsg)
+      setAuthError(errMsg)
     } finally {
       setAuthLoading(false)
     }
@@ -206,10 +206,10 @@ export function App(): React.JSX.Element {
     localStorage.removeItem("draft_user")
     localStorage.removeItem("draft_mode")
     setAppState("idle")
-    resetRound()
+    resetRoundState()
   }
 
-  const resetRound = () => {
+  const resetRoundState = () => {
     setAnswer("")
     setAttempt(1)
     setScore(null)
@@ -223,41 +223,50 @@ export function App(): React.JSX.Element {
     e.preventDefault()
     e.stopPropagation()
     if (!selectedTopic || !selectedDiff) return
+
     setDebugError("")
     setAppState("loading")
     setTimeLeft(60)
-    resetRound()
+    resetRoundState()
 
     try {
-      const res = await fetch(`${BACKEND_URL}/generate_question`, {
+      const response = await fetch(`${BACKEND_URL}/generate_question`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ topic: selectedTopic, difficulty: selectedDiff })
+        body: JSON.stringify({
+          topic: selectedTopic,
+          difficulty: selectedDiff
+        })
       })
-      if (res.status === 401 && token) {
+
+      if (response.status === 401 && token) {
+        const errText = await response.text()
         handleLogout()
-        alert("Session expired. Please log in again.")
+        alert(`Server rejected token: ${errText}`)
         return
       }
-      if (!res.ok) {
-        const t = await res.text()
-        setDebugError(`SERVER ERROR (${res.status}): ${t}`)
+
+      if (!response.ok) {
+        const errText = await response.text()
+        setDebugError(`SERVER REJECTED CONNECTION (${response.status}): ${errText}`)
         setAppState("error")
         return
       }
-      const data = await res.json()
-      if (!data?.question) {
-        setDebugError("Server returned empty question.")
+
+      const data = await response.json()
+      if (!data || !data.question) {
+        setDebugError("Server returned empty data. Check Render logs.")
         setAppState("error")
         return
       }
+
       setQuestion(data.question)
       setAppState("pick-in")
       setTimeout(() => setAppState("active"), 2000)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Network failure"
-      logger.error("Fetch question:", msg)
-      setDebugError(`NETWORK CRASH: ${msg}`)
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : "Network failure"
+      logger.error("Question fetch failed:", errMsg)
+      setDebugError(`NETWORK CRASH: ${errMsg}`)
       setAppState("error")
     }
   }
@@ -265,45 +274,50 @@ export function App(): React.JSX.Element {
   const handleSubmitAnswer = async () => {
     const trimmed = answer.trim()
     if (!trimmed) {
-      setSubmitError("Please write an answer before submitting.")
+      setSubmitError("Please write your technical formulation before submitting.")
       return
     }
+
     setIsSubmittingAnswer(true)
     setSubmitError("")
 
     try {
-      logger.info(`Submitting attempt ${attempt}/3...`)
-      const res = await fetch(`${BACKEND_URL}/submit_answer`, {
+      logger.info(`Evaluating candidate answer for attempt ${attempt} of 3...`)
+      const response = await fetch(`${BACKEND_URL}/submit_answer`, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({
-          question,
+          question: question,
           answer: trimmed,
-          attempt,
-          topic: selectedTopic || "General Data Science",
-          difficulty: selectedDiff || "Starter"
+          attempt: attempt,
+          topic: selectedTopic,
+          difficulty: selectedDiff
         })
       })
-      const data: EvaluationResponse = await res.json()
-      if (!res.ok) throw new Error((data as unknown as { detail?: string }).detail || "Evaluation failed")
 
-      // Always set score from backend, fallback to 45 if not returned
-      const receivedScore = typeof data.score === 'number' ? data.score : (data.is_correct ? 80 : 45)
+      const data: EvaluationResponse = await response.json()
+      if (!response.ok) {
+        throw new Error((data as unknown as { detail?: string }).detail || "Evaluation request failed.")
+      }
+
+      const receivedScore = typeof data.score === 'number' ? data.score : (data.is_correct ? 85 : 45)
       setScore(receivedScore)
       setIsCorrect(data.is_correct)
       setFeedback(data.feedback)
 
-      if (data.is_correct || attempt >= 3) {
+      if (data.is_correct) {
         setIdealAnswer(data.ideal_answer || null)
+      } else {
+        if (attempt < 3) {
+          setAttempt(prev => prev + 1)
+        } else {
+          setIdealAnswer(data.ideal_answer || null)
+        }
       }
-      if (!data.is_correct && attempt < 3) {
-        setAttempt(prev => prev + 1)
-      }
-      logger.info(`Score received: ${receivedScore}/100 | Correct: ${data.is_correct} | Next Attempt: ${attempt + 1}`)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Submission error"
-      logger.error("Submit answer:", msg)
-      setSubmitError(msg)
+      const errMsg = err instanceof Error ? err.message : "Submission error"
+      logger.error("Answer evaluation failed:", errMsg)
+      setSubmitError(errMsg)
     } finally {
       setIsSubmittingAnswer(false)
     }
@@ -327,54 +341,107 @@ export function App(): React.JSX.Element {
     }
   }
 
-  const formatTime = (s: number) => `0${Math.floor(s / 60)}:${(s % 60 < 10 ? '0' : '')}${s % 60}`
-  const isRoundFinished = isCorrect === true || (isCorrect === false && attempt >= 3)
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `0${m}:${s < 10 ? '0' : ''}${s}`
+  }
+
+  const isRoundFinished = isCorrect === true || (isCorrect === false && attempt >= 3 && idealAnswer !== null)
   const isAuthenticatedOrGuest = Boolean(token || isGuest)
 
-  // ─── LOGIN / GUEST SCREEN ───────────────────────────────────────────────────
+  // ─── AUTH SCREEN (GLASSMORPHIC WAR ROOM) ───
   if (!isAuthenticatedOrGuest) {
     return (
-      <div className="draft-container">
+      <div className="draft-container" style={{ minHeight: '90vh', justifyContent: 'center' }}>
         <div className="draft-header">
-          <h1>NFL Data Science Draft Combine</h1>
-          <p>Front Office Evaluation & Personalization Engine</p>
+          <h1>NFL Data Science Combine</h1>
+          <div className="headline-tag">Front Office Scouting & AI Evaluation Terminal</div>
         </div>
-        <div className="auth-container">
-          <form className="auth-card" onSubmit={handleAuth}>
-            <h2>{authMode === "login" ? "GM Front Office Login" : "Register New Franchise"}</h2>
-            <input className="auth-input" type="text" placeholder="Username" value={authUsername} onChange={e => setAuthUsername(e.target.value)} required />
-            <input className="auth-input" type="password" placeholder="Password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required />
-            {authError && <p style={{ color: authError.includes("created") ? "#10b981" : "#ef4444", marginBottom: "15px" }}>{authError}</p>}
-            <button className="auth-button" type="submit" disabled={authLoading}>
-              {authLoading ? "Processing..." : authMode === "login" ? "Enter Draft Room" : "Create Franchise"}
-            </button>
-            <button className="auth-toggle" type="button" onClick={() => { setAuthMode(m => m === "login" ? "register" : "login"); setAuthError("") }}>
-              {authMode === "login" ? "New GM? Register here." : "Already have a franchise? Log in."}
+
+        <div style={{
+          width: '100%', maxWidth: '420px',
+          background: 'var(--bg-surface)', backdropFilter: 'blur(20px)',
+          border: '1px solid var(--border-subtle)', borderRadius: '16px',
+          padding: '32px', boxShadow: '0 25px 60px rgba(0,0,0,0.7)'
+        }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '0 0 18px', textAlign: 'center', color: '#f8fafc', letterSpacing: '0.04em' }}>
+            {authMode === "login" ? "GM FRANCHISE ACCESS" : "REGISTER FRANCHISE"}
+          </h2>
+
+          <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <input
+              type="text"
+              placeholder="Franchise Username"
+              value={authUsername}
+              onChange={(e) => setAuthUsername(e.target.value)}
+              required
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '13px 16px',
+                borderRadius: '8px', background: 'rgba(10, 15, 29, 0.8)',
+                border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: '14px'
+              }}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              required
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '13px 16px',
+                borderRadius: '8px', background: 'rgba(10, 15, 29, 0.8)',
+                border: '1px solid rgba(255,255,255,0.12)', color: '#fff', fontSize: '14px'
+              }}
+            />
+
+            {authError && (
+              <div style={{ fontSize: '13px', color: authError.includes("established") ? '#34d399' : '#fb7185', textAlign: 'center' }}>
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authLoading}
+              className="primary-draft-btn"
+              style={{ minWidth: '100%', padding: '14px' }}
+            >
+              {authLoading ? "Authenticating..." : (authMode === "login" ? "Enter War Room" : "Create Franchise")}
             </button>
 
-            <div style={{ marginTop: '20px', borderTop: '1px solid #334155', paddingTop: '16px' }}>
-              <button
-                type="button"
-                onClick={handleContinueAsGuest}
-                style={{
-                  width: '100%', padding: '12px', borderRadius: '8px',
-                  backgroundColor: '#1e293b', border: '1px solid #475569', color: '#94a3b8',
-                  fontSize: '14px', fontWeight: 600, cursor: 'pointer'
-                }}
-              >
-                🏈 Continue as Guest Scout (Stored in DB)
-              </button>
-              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px', textAlign: 'center' }}>
-                Your guest questions, submissions, and strength/weakness stats persist in PostgreSQL.
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => { setAuthMode(m => m === "login" ? "register" : "login"); setAuthError("") }}
+              style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '13px', cursor: 'pointer', marginTop: '6px' }}
+            >
+              {authMode === "login" ? "Need a franchise? Register here." : "Already have a franchise? Log in."}
+            </button>
           </form>
+
+          <div style={{ marginTop: '24px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>
+            <button
+              type="button"
+              onClick={handleContinueAsGuest}
+              style={{
+                width: '100%', padding: '12px', borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.12)',
+                color: '#38bdf8', fontSize: '13px', fontWeight: 700, cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              ⚡ Continue as Guest Scout (PostgreSQL Synced)
+            </button>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px', textAlign: 'center' }}>
+              Your answers, 0-100 scores, and strengths profile persist seamlessly.
+            </div>
+          </div>
         </div>
       </div>
     )
   }
 
-  // ─── MAIN DRAFT BOARD ───────────────────────────────────────────────────────
+  // ─── MAIN WAR ROOM DASHBOARD ───
   const isReady = selectedTopic && selectedDiff
   let btnText = "Select Position & Level"
   if (selectedTopic && !selectedDiff) btnText = "Select Prospect Level"
@@ -383,90 +450,95 @@ export function App(): React.JSX.Element {
 
   return (
     <div className="draft-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', maxWidth: '1000px', margin: '0 auto 15px' }}>
-        <button
-          type="button"
-          onClick={fetchScoutingReport}
-          style={{
-            background: '#1e293b', border: '1px solid #3b82f6', color: '#60a5fa',
-            padding: '8px 16px', borderRadius: '6px', fontWeight: 700, cursor: 'pointer'
-          }}
-        >
-          {reportLoading ? 'Loading Profile...' : '📊 Scouting Report (Strengths & Weaknesses)'}
-        </button>
-        <button className="logout-btn" onClick={handleLogout}>
-          {token ? "Log Out" : "Exit Guest Mode"}
-        </button>
+      {/* ── TOP NAV STATUS BAR ── */}
+      <div className="war-room-nav">
+        <div className="status-badge">
+          <span className="live-dot" />
+          <span>COMBINE LIVE • POSTGRESQL SYNCED</span>
+        </div>
+
+        <div className="nav-actions">
+          <button type="button" className="scouting-pill-btn" onClick={fetchScoutingReport}>
+            📊 {reportLoading ? "Scouting..." : "Scouting Report"}
+          </button>
+          <button type="button" className="exit-pill-btn" onClick={handleLogout}>
+            {token ? `Log Out (${username})` : `Exit Guest [${guestId.substring(0, 8)}]`}
+          </button>
+        </div>
       </div>
 
+      {/* ── HEADER ── */}
       <div className="draft-header">
         <h1>NFL Data Science Draft Combine</h1>
-        <p>{token ? `GM ${username}'s Front Office` : `Guest Scout [${guestId.substring(0, 11)}] (PostgreSQL Synced)`}</p>
+        <div className="headline-tag">
+          {token ? `GM ${username} • Front Office Command` : `Guest Scout [${guestId}] • Candidate Assessment`}
+        </div>
       </div>
 
       {/* ── PERSONALIZED SCOUTING REPORT MODAL ── */}
       {showReport && scoutingReport && (
         <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 999,
+          position: 'fixed', inset: 0,
+          backgroundColor: 'rgba(3, 7, 18, 0.88)', zIndex: 9999,
+          backdropFilter: 'blur(16px)',
           display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px'
         }}>
           <div style={{
-            backgroundColor: '#0f172a', border: '2px solid #3b82f6', borderRadius: '14px',
-            maxWidth: '650px', width: '100%', maxHeight: '90vh', overflowY: 'auto',
-            padding: '24px', color: '#f8fafc', boxShadow: '0 20px 40px rgba(0,0,0,0.8)'
+            backgroundColor: '#0c1322', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '16px',
+            maxWidth: '680px', width: '100%', maxHeight: '90vh', overflowY: 'auto',
+            padding: '28px', color: '#f8fafc', boxShadow: '0 25px 60px rgba(0,0,0,0.85)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #1e293b', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '14px' }}>
               <div>
-                <h2 style={{ margin: 0, fontSize: '20px', color: '#60a5fa' }}>📋 Prospect Scouting Report</h2>
+                <h2 style={{ margin: 0, fontSize: '20px', color: '#38bdf8', fontWeight: 800 }}>📋 Candidate Scouting Profile</h2>
                 <span style={{ fontSize: '13px', color: '#94a3b8' }}>Evaluated Candidate: {scoutingReport.candidate}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setShowReport(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '22px', cursor: 'pointer' }}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '24px', cursor: 'pointer' }}
               >
                 ✕
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-              <div style={{ flex: 1, backgroundColor: '#1e293b', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>Overall Average</div>
-                <div style={{ fontSize: '26px', fontWeight: 800, color: scoutingReport.overall_avg_score >= 70 ? '#10b981' : '#f59e0b' }}>
-                  {scoutingReport.overall_avg_score}/100
+            <div style={{ display: 'flex', gap: '14px', marginBottom: '20px' }}>
+              <div style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>Overall Combine Score</div>
+                <div style={{ fontSize: '30px', fontWeight: 900, color: scoutingReport.overall_avg_score >= 70 ? '#34d399' : '#fbbf24', marginTop: '4px' }}>
+                  {scoutingReport.overall_avg_score}<span style={{ fontSize: '16px', color: '#64748b' }}>/100</span>
                 </div>
               </div>
-              <div style={{ flex: 1, backgroundColor: '#1e293b', borderRadius: '8px', padding: '14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>Total Answers Graded</div>
-                <div style={{ fontSize: '26px', fontWeight: 800, color: '#38bdf8' }}>
+              <div style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>Graded Responses</div>
+                <div style={{ fontSize: '30px', fontWeight: 900, color: '#38bdf8', marginTop: '4px' }}>
                   {scoutingReport.total_answers}
                 </div>
               </div>
             </div>
 
-            <div style={{ backgroundColor: 'rgba(59,130,246,0.15)', border: '1px solid #2563eb', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px' }}>
-              <div style={{ fontWeight: 700, color: '#93c5fd', fontSize: '13px', textTransform: 'uppercase', marginBottom: '4px' }}>
+            <div style={{ backgroundColor: 'rgba(37, 99, 235, 0.12)', border: '1px solid rgba(37, 99, 235, 0.3)', borderRadius: '10px', padding: '14px 18px', marginBottom: '22px' }}>
+              <div style={{ fontWeight: 800, color: '#93c5fd', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
                 🎯 Head Coach Directive:
               </div>
-              <div style={{ fontSize: '14px', color: '#e2e8f0' }}>{scoutingReport.recommendation}</div>
+              <div style={{ fontSize: '14px', color: '#e2e8f0', lineHeight: 1.5 }}>{scoutingReport.recommendation}</div>
             </div>
 
             {/* Strengths */}
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '15px', color: '#34d399', textTransform: 'uppercase', marginBottom: '8px' }}>
-                💪 Core Strengths (Score ≥ 70)
+            <div style={{ marginBottom: '22px' }}>
+              <h3 style={{ fontSize: '13px', color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+                💪 Core Strengths (Average Score ≥ 70)
               </h3>
               {scoutingReport.strengths.length === 0 ? (
-                <div style={{ fontSize: '13px', color: '#64748b' }}>No verified strengths yet. Score 70+ in a topic to place it here.</div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>No verified strengths yet. Score 70+ in a topic to feature here.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {scoutingReport.strengths.map(s => (
-                    <div key={s.topic} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', padding: '10px 14px', borderRadius: '6px' }}>
-                      <span style={{ fontWeight: 600 }}>{s.topic}</span>
+                    <div key={s.topic} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: '10px 14px', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{s.topic}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 700 }}>{s.grade}</span>
-                        <span style={{ backgroundColor: '#064e3b', color: '#34d399', padding: '2px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 800 }}>
+                        <span style={{ fontSize: '12px', color: '#34d399', fontWeight: 700 }}>{s.grade}</span>
+                        <span style={{ backgroundColor: '#064e3b', color: '#34d399', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 900 }}>
                           {s.avg_score}
                         </span>
                       </div>
@@ -477,20 +549,20 @@ export function App(): React.JSX.Element {
             </div>
 
             {/* Weaknesses */}
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '15px', color: '#f87171', textTransform: 'uppercase', marginBottom: '8px' }}>
-                ⚠️ Target Weaknesses (Score &lt; 70)
+            <div style={{ marginBottom: '24px' }}>
+              <h3 style={{ fontSize: '13px', color: '#fb7185', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+                ⚠️ Target Weaknesses (Average Score &lt; 70)
               </h3>
               {scoutingReport.weaknesses.length === 0 ? (
-                <div style={{ fontSize: '13px', color: '#64748b' }}>No current weaknesses recorded! Great consistency.</div>
+                <div style={{ fontSize: '13px', color: '#64748b' }}>No weaknesses identified. Solid performance across the board.</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {scoutingReport.weaknesses.map(w => (
-                    <div key={w.topic} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1e293b', padding: '10px 14px', borderRadius: '6px' }}>
-                      <span style={{ fontWeight: 600 }}>{w.topic}</span>
+                    <div key={w.topic} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(244, 63, 94, 0.08)', border: '1px solid rgba(244, 63, 94, 0.25)', padding: '10px 14px', borderRadius: '8px' }}>
+                      <span style={{ fontWeight: 600, fontSize: '14px' }}>{w.topic}</span>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ fontSize: '12px', color: '#f87171', fontWeight: 700 }}>{w.grade}</span>
-                        <span style={{ backgroundColor: '#7f1d1d', color: '#fca5a5', padding: '2px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: 800 }}>
+                        <span style={{ fontSize: '12px', color: '#fb7185', fontWeight: 700 }}>{w.grade}</span>
+                        <span style={{ backgroundColor: '#881337', color: '#fecdd3', padding: '3px 8px', borderRadius: '6px', fontSize: '12px', fontWeight: 900 }}>
                           {w.avg_score}
                         </span>
                       </div>
@@ -503,185 +575,246 @@ export function App(): React.JSX.Element {
             <button
               type="button"
               onClick={() => setShowReport(false)}
-              style={{ width: '100%', padding: '12px', backgroundColor: '#2563eb', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+              className="primary-draft-btn"
+              style={{ width: '100%', padding: '12px' }}
             >
-              Back to Combine Drills
+              Return to War Room
             </button>
           </div>
         </div>
       )}
 
+      {/* ── STAGE ── */}
       <div className="stage">
         {appState !== "idle" && appState !== "error" && (
-          <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>{formatTime(timeLeft)}</div>
+          <div className={`draft-clock ${timeLeft <= 10 ? 'danger' : ''}`}>
+            {formatTime(timeLeft)}
+          </div>
         )}
 
-        {/* ── IDLE ── */}
         {appState === "idle" && (
           <>
-            <div className="user-greeting">
-              {token ? `GM ${username}'s Draft Board` : `Guest Combine Scout (${guestId.substring(0, 11)})`}
+            {/* Target Position */}
+            <div className="section-headline">
+              <span>Target Position on the Board</span>
             </div>
-            <div className="draft-board-title">Target Position on the Board</div>
-            <div className="draft-board">
-              {DRAFT_BOARD.map(item => (
-                <div key={item.id} className={`prospect-card ${selectedTopic === item.ds ? 'selected' : ''}`} onClick={() => setSelectedTopic(item.ds)}>
-                  <div className="nfl-theme">{item.nfl}</div>
-                  <div className="ds-theme">{item.ds}</div>
+
+            <div className="draft-board-grid">
+              {DRAFT_BOARD.map((item) => (
+                <div
+                  key={item.id}
+                  className={`prospect-card ${selectedTopic === item.ds ? 'selected' : ''}`}
+                  onClick={() => setSelectedTopic(item.ds)}
+                >
+                  <div className="card-top-row">
+                    <span className="card-icon">{item.icon}</span>
+                    <span className="card-pos-tag">{item.pos}</span>
+                  </div>
+                  <div className="nfl-title">{item.nfl}</div>
+                  <div className="ds-subtitle">{item.ds}</div>
                 </div>
               ))}
             </div>
-            <div className="draft-board-title">Prospect Level (Difficulty)</div>
-            <div className="difficulty-board">
-              {DIFFICULTIES.map(d => (
-                <button type="button" key={d.id} className={`diff-btn ${selectedDiff === d.name ? 'selected' : ''}`} onClick={() => setSelectedDiff(d.name)}>{d.name}</button>
+
+            {/* Prospect Level */}
+            <div className="section-headline">
+              <span>Prospect Level (Difficulty)</span>
+            </div>
+
+            <div className="difficulty-selector">
+              {DIFFICULTIES.map(diff => (
+                <button
+                  type="button"
+                  key={diff.id}
+                  data-level={diff.id}
+                  className={`diff-pill ${selectedDiff === diff.name ? 'selected' : ''}`}
+                  onClick={() => setSelectedDiff(diff.name)}
+                >
+                  <span className="diff-title">{diff.title}</span>
+                  <span className="diff-sub">{diff.sub}</span>
+                </button>
               ))}
             </div>
-            <button type="button" className="draft-button" onClick={fetchQuestion} disabled={!isReady} style={{ opacity: isReady ? 1 : 0.5 }}>{btnText}</button>
+
+            {/* CTA */}
+            <div className="cta-wrapper">
+              <button
+                type="button"
+                className="primary-draft-btn"
+                onClick={fetchQuestion}
+                disabled={!isReady}
+              >
+                {btnText}
+              </button>
+            </div>
           </>
         )}
 
-        {appState === "loading" && <div className="loading-banner">WAR ROOM IS ON THE CLOCK...</div>}
-        {appState === "pick-in" && <div className="pick-is-in-banner"><div className="flash-text">THE PICK IS IN</div></div>}
+        {appState === "loading" && (
+          <div className="loading-banner">
+            WAR ROOM IS ON THE CLOCK...
+          </div>
+        )}
 
-        {/* ── ACTIVE / TIME-UP ── */}
+        {appState === "pick-in" && (
+          <div className="pick-is-in-banner">
+            THE PICK IS IN
+          </div>
+        )}
+
+        {/* ── ACTIVE DRILL CARD ── */}
         {(appState === "active" || appState === "time-up") && (
           <div className="active-card">
             <div className="question-box">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <div style={{ color: '#1d4ed8', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '13px' }}>
-                  SCOUTING DRILL: {selectedTopic} ({selectedDiff})
-                </div>
-                <div style={{
-                  background: isCorrect === true ? '#10b981' : isCorrect === false ? '#f59e0b' : '#3b82f6',
-                  color: '#fff', fontSize: '12px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '12px'
-                }}>
+              <div className="question-meta-row">
+                <span className="drill-topic-label">
+                  DRILL: {selectedTopic} ({selectedDiff})
+                </span>
+                <span
+                  className="try-pill"
+                  style={{
+                    backgroundColor: isCorrect === true ? '#10b981' : (isCorrect === false ? '#f59e0b' : '#2563eb')
+                  }}
+                >
                   {isRoundFinished ? 'EVALUATION COMPLETE' : `TRY ${attempt} OF 3`}
-                </div>
+                </span>
               </div>
-              <p>{question}</p>
+              <p className="question-text">{question}</p>
             </div>
 
-            {/* Answer input */}
-            <div style={{ marginTop: '16px', textAlign: 'left' }}>
+            {/* Response Section */}
+            <div style={{ textAlign: 'left' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label htmlFor="candidate-answer" style={{ color: '#93c5fd', fontWeight: 600, fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                <label
+                  htmlFor="candidate-answer"
+                  style={{ color: '#93c5fd', fontWeight: 800, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                >
                   Your Playbook Response:
                 </label>
-                <span style={{ color: '#64748b', fontSize: '12px' }}>{answer.length} characters</span>
+                <span style={{ color: '#64748b', fontSize: '12px', fontFamily: 'var(--font-mono)' }}>
+                  {answer.length} CHARS
+                </span>
               </div>
 
               <textarea
                 id="candidate-answer"
+                className="response-textarea"
                 value={answer}
-                onChange={e => setAnswer(e.target.value)}
-                placeholder="Formulate your detailed technical response here..."
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Formulate your detailed technical response here... Discuss mathematical foundations, algorithmic trade-offs, and edge cases."
                 rows={6}
                 disabled={isSubmittingAnswer || isRoundFinished}
                 style={{
-                  width: '100%', boxSizing: 'border-box', padding: '14px', borderRadius: '8px',
-                  border: isCorrect === true ? '2px solid #10b981' : isCorrect === false ? '2px solid #f59e0b' : '1px solid #334155',
-                  backgroundColor: '#0f172a', color: '#f8fafc', fontSize: '15px',
-                  fontFamily: 'inherit', lineHeight: '1.6', outline: 'none', resize: 'vertical'
+                  border: isCorrect === true ? '2px solid #10b981' : (isCorrect === false ? '2px solid #f59e0b' : '1px solid rgba(255,255,255,0.12)')
                 }}
               />
 
               {!isRoundFinished && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
                   <button
                     type="button"
+                    className="primary-draft-btn"
                     onClick={handleSubmitAnswer}
                     disabled={isSubmittingAnswer || !answer.trim()}
-                    style={{
-                      padding: '10px 24px', fontSize: '15px', fontWeight: 'bold',
-                      color: '#fff', backgroundColor: '#2563eb', border: 'none', borderRadius: '6px',
-                      cursor: isSubmittingAnswer || !answer.trim() ? 'not-allowed' : 'pointer',
-                      opacity: !answer.trim() ? 0.6 : 1, transition: 'all 0.2s',
-                      boxShadow: '0 4px 12px rgba(37,99,235,0.35)'
-                    }}
+                    style={{ minWidth: 'auto', padding: '12px 24px', fontSize: '14px' }}
                   >
                     {isSubmittingAnswer
-                      ? '⏱️ AI Grading...'
-                      : isCorrect === false
-                        ? `🚀 Try Again (Attempt ${attempt} of 3)`
-                        : `🚀 Submit Answer (Attempt ${attempt} of 3)`}
+                      ? 'AI Judge Scoring...'
+                      : (isCorrect === false ? `Try Again (Attempt ${attempt} of 3)` : `Submit Answer (Attempt ${attempt} of 3)`)}
                   </button>
                 </div>
               )}
 
-              {/* ── SCORE GAUGE: PROMINENTLY DISPLAYED ON SUBMISSION ── */}
+              {/* ── 0 / 100 GAUGE ── */}
               {score !== null && (
                 <div style={{
-                  marginTop: '16px',
+                  marginTop: '18px',
                   padding: '16px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                  border: isCorrect ? '1px solid #10b981' : '1px solid #f59e0b',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(10, 15, 29, 0.85)',
+                  border: isCorrect ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(245, 158, 11, 0.4)',
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
                 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                     Attempt {isCorrect ? attempt : (attempt > 1 ? attempt - 1 : 1)} Performance Rating
                   </div>
                   <ScoreGauge score={score} />
                 </div>
               )}
 
-              {/* ── FEEDBACK BANNERS ── */}
+              {/* Feedback Banners */}
               {isCorrect === true && (
-                <div style={{ marginTop: '16px', padding: '14px 18px', borderRadius: '8px', backgroundColor: 'rgba(16,185,129,0.15)', border: '1px solid #10b981', color: '#34d399', fontSize: '14px' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '6px' }}>🎯 TOUCHDOWN! ANSWER PASSED (SCORE ≥ 70)</div>
+                <div style={{ marginTop: '16px', padding: '16px 20px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '1px solid #10b981', color: '#34d399', fontSize: '14px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '15px', marginBottom: '6px' }}>🎯 TOUCHDOWN! ANSWER PASSED (SCORE ≥ 70)</div>
                   <div>{feedback}</div>
                 </div>
               )}
 
               {isCorrect === false && !isRoundFinished && (
-                <div style={{ marginTop: '16px', padding: '14px 18px', borderRadius: '8px', backgroundColor: 'rgba(245,158,11,0.15)', border: '1px solid #f59e0b', color: '#fbbf24', fontSize: '14px' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '15px', marginBottom: '6px' }}>⚠️ INCOMPLETE ({3 - attempt + 1} attempts remaining)</div>
-                  <div style={{ marginBottom: '8px' }}>{feedback}</div>
-                  <div style={{ fontSize: '13px', color: '#fde68a' }}>💡 <em>Coaching Hint: Review the feedback above, refine your answer in the box, and click Try Again!</em></div>
+                <div style={{ marginTop: '16px', padding: '16px 20px', borderRadius: '10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid #f59e0b', color: '#fbbf24', fontSize: '14px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '15px', marginBottom: '6px' }}>⚠️ INCOMPLETE ({4 - attempt} tries remaining)</div>
+                  <div style={{ marginBottom: '6px' }}>{feedback}</div>
+                  <div style={{ fontSize: '12px', color: '#fde68a' }}>💡 <em>Coaching Hint: Review the feedback above, refine your playbook response, and click Try Again!</em></div>
                 </div>
               )}
 
               {isCorrect === false && isRoundFinished && (
-                <div style={{ marginTop: '16px', padding: '14px 18px', borderRadius: '8px', backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#f87171', fontSize: '14px' }}>
-                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '6px' }}>❌ TURNOVER ON DOWNS (All 3 Tries Used)</div>
+                <div style={{ marginTop: '16px', padding: '16px 20px', borderRadius: '10px', backgroundColor: 'rgba(244, 63, 94, 0.12)', border: '1px solid #f43f5e', color: '#fb7185', fontSize: '14px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '15px', marginBottom: '6px' }}>❌ TURNOVER ON DOWNS (All 3 Tries Used)</div>
                   <div>{feedback}</div>
                 </div>
               )}
 
-              {/* ── IDEAL ANSWER REVEAL ── */}
+              {/* Canonical Ideal Answer Card */}
               {idealAnswer && (
-                <div style={{ marginTop: '16px', padding: '16px 20px', borderRadius: '10px', backgroundColor: 'rgba(30,41,59,0.85)', border: '1px solid #3b82f6', color: '#f8fafc', boxShadow: '0 10px 25px rgba(0,0,0,0.4)' }}>
-                  <div style={{ color: '#60a5fa', fontWeight: 700, fontSize: '13px', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '8px' }}>
-                    📖 The Ideal Playbook Solution:
+                <div style={{ marginTop: '16px', padding: '18px 22px', borderRadius: '12px', backgroundColor: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#f8fafc', boxShadow: '0 12px 30px rgba(0,0,0,0.5)' }}>
+                  <div style={{ color: '#38bdf8', fontWeight: 800, fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '8px' }}>
+                    📖 The Canonical Playbook Solution:
                   </div>
-                  <div style={{ fontSize: '15px', lineHeight: '1.7', color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>{idealAnswer}</div>
+                  <div style={{ fontSize: '15px', lineHeight: 1.7, color: '#e2e8f0', whiteSpace: 'pre-wrap' }}>
+                    {idealAnswer}
+                  </div>
                 </div>
               )}
 
               {submitError && (
-                <div style={{ marginTop: '12px', padding: '12px 16px', borderRadius: '6px', backgroundColor: 'rgba(239,68,68,0.15)', border: '1px solid #ef4444', color: '#f87171', fontSize: '14px' }}>
+                <div style={{ marginTop: '14px', padding: '12px 16px', borderRadius: '8px', backgroundColor: 'rgba(244, 63, 94, 0.15)', border: '1px solid #f43f5e', color: '#fb7185', fontSize: '13px' }}>
                   ⚠️ {submitError}
                 </div>
               )}
             </div>
 
-            {appState === "time-up" && <div className="time-up-banner">TIME'S UP. PENCILS DOWN.</div>}
+            {appState === "time-up" && (
+              <div style={{ color: '#f43f5e', fontWeight: 800, margin: '20px 0', fontSize: '18px' }}>TIME'S UP. PENCILS DOWN.</div>
+            )}
 
-            <button type="button" className="reset-button" onClick={() => { setAppState("idle"); setSelectedTopic(null); setSelectedDiff(null); resetRound() }}>
+            <button
+              type="button"
+              className="reset-button"
+              onClick={() => {
+                setAppState("idle")
+                setSelectedTopic("SQL & Data Engineering")
+                setSelectedDiff("Rookie (Easy)")
+                resetRoundState()
+              }}
+            >
               Next Combine Pick
             </button>
           </div>
         )}
 
-        {/* ── ERROR ── */}
         {appState === "error" && (
-          <div className="active-card" style={{ border: "2px solid #ef4444" }}>
-            <div className="time-up-banner" style={{ marginBottom: "20px" }}>SYSTEM MALFUNCTION</div>
-            <div className="question-box"><p style={{ color: "#ef4444", fontWeight: "bold" }}>{debugError}</p></div>
-            <button type="button" className="reset-button" onClick={() => setAppState("idle")}>Reset & Try Again</button>
+          <div className="active-card" style={{ border: "2px solid #f43f5e" }}>
+            <div style={{ color: '#f43f5e', fontWeight: 800, fontSize: '20px', marginBottom: '14px' }}>SYSTEM MALFUNCTION</div>
+            <div className="question-box">
+              <p style={{ color: '#fb7185', fontWeight: 600 }}>{debugError}</p>
+            </div>
+            <button type="button" className="reset-button" onClick={() => setAppState("idle")}>
+              Reset & Try Again
+            </button>
           </div>
         )}
       </div>
