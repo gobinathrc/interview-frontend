@@ -430,10 +430,10 @@ export function App(): React.JSX.Element {
                 transition: 'all 0.2s ease'
               }}
             >
-              ⚡ Continue as Guest Scout (PostgreSQL Synced)
+              ⚡ Continue as Guest Scout
             </button>
             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '8px', textAlign: 'center' }}>
-              Your answers, 0-100 scores, and strengths profile persist seamlessly.
+              Instant combine access • Private evaluation history preserved
             </div>
           </div>
         </div>
@@ -454,7 +454,7 @@ export function App(): React.JSX.Element {
       <div className="war-room-nav">
         <div className="status-badge">
           <span className="live-dot" />
-          <span>COMBINE LIVE • POSTGRESQL SYNCED</span>
+          <span>COMBINE ACTIVE • LIVE WAR ROOM</span>
         </div>
 
         <div className="nav-actions">
@@ -469,7 +469,7 @@ export function App(): React.JSX.Element {
 
       {/* ── HEADER ── */}
       <div className="draft-header">
-        <h1>NFL Data Science Draft Combine</h1>
+        <h1>NFL Data Science Combine</h1>
         <div className="headline-tag">
           {token ? `GM ${username} • Front Office Command` : `Guest Scout [${guestId}] • Candidate Assessment`}
         </div>
